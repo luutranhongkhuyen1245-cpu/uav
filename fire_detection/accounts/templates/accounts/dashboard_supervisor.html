@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Bảng điều khiển Điều phối viên giám sát - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'agents:agent_list' %}">
+            <i class="bi bi-people me-1"></i> Người vận hành UAV
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <h1 class="h3 mb-2 text-primary">
+                        <i class="bi bi-binoculars me-2"></i> Bảng điều khiển Điều phối viên giám sát
+                    </h1>
+                    <p class="text-muted mb-0">
+                        <i class="bi bi-info-circle me-1"></i> 
+                        Chào mừng, {{ user.first_name|default:user.email }}! Quản lý các chuyến bay tuần tra và thẩm định các cảnh báo cháy từ camera UAV.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Incident Alerts Quick Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 border-start border-danger border-4 bg-white">
+                <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-danger px-2 py-1"><i class="bi bi-fire me-1"></i> Khẩn cấp</span>
+                            <h4 class="h5 mb-0 text-danger fw-bold">
+                                Nhật ký Sự cố & Thẩm định Cảnh báo Cháy từ Camera UAV
+                            </h4>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Theo dõi ảnh chụp minh chứng tự động từ camera UAV và thẩm định xử lý thực địa kịp thời.
+                        </p>
+                    </div>
+                    <a href="{% url 'projects:alert_list' %}" class="btn btn-danger btn-lg shadow-sm">
+                        <i class="bi bi-shield-exclamation me-2"></i> Mở trang Thẩm định Sự cố
+                        <span class="badge bg-white text-danger ms-2 alert-count-badge d-none">0</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Management Functions (3 columns) -->
+    <div class="row g-4">
+        <!-- Project List Card -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="bg-primary-subtle text-primary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; font-size: 1.8rem;">
+                            <i class="bi bi-folder2-open"></i>
+                        </div>
+                        <h4 class="card-title h5 fw-bold mb-2">Dự án tuần tra của tôi</h4>
+                        <p class="card-text text-muted small">
+                            Xem, theo dõi tiến độ và điều phối các dự án giám sát phòng cháy rừng theo thời gian thực.
+                        </p>
+                    </div>
+                    <div class="mt-4">
+                        <a href="{% url 'projects:project_list' %}" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-folder2-open me-2"></i> Xem danh sách dự án
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Project Card -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="bg-primary-subtle text-primary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; font-size: 1.8rem;">
+                            <i class="bi bi-folder-plus"></i>
+                        </div>
+                        <h4 class="card-title h5 fw-bold mb-2">Tạo Dự án tuần tra mới</h4>
+                        <p class="card-text text-muted small">
+                            Khởi tạo chuyến bay tuần tra mới, thiết lập vùng rừng giám sát và phân công chuyên viên phụ trách.
+                        </p>
+                    </div>
+                    <div class="mt-4">
+                        <a href="{% url 'projects:create_project' %}" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-folder-plus me-2"></i> Tạo dự án mới
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent Roster Card -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="bg-primary-subtle text-primary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; font-size: 1.8rem;">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <h4 class="card-title h5 fw-bold mb-2">Đội ngũ Vận hành UAV</h4>
+                        <p class="card-text text-muted small">
+                            Xem danh sách, thông tin liên lạc và tình trạng sẵn sàng của các phi công UAV để phân công bay.
+                        </p>
+                    </div>
+                    <div class="mt-4">
+                        <a href="{% url 'agents:agent_list' %}" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-people me-2"></i> Xem danh sách đội ngũ
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

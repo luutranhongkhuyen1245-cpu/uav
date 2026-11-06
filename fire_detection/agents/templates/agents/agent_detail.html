@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Hồ sơ Người vận hành UAV - {{ agent.email }} - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'agents:agent_list' %}">
+            <i class="bi bi-people me-1"></i> Người vận hành UAV
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="card border-0 bg-light mb-4">
+        <div class="card-body py-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'supervisor_dashboard' %}" class="text-decoration-none">
+                            <i class="bi bi-house-door me-1"></i> Bảng điều khiển
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'agents:agent_list' %}" class="text-decoration-none">Người vận hành UAV</a>
+                    </li>
+                    <li class="breadcrumb-item active">{{ agent.email }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Profile Card -->
+        <div class="col-lg-4">
+            <div class="card shadow-lg border-0 h-100">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3 shadow" style="width: 90px; height: 90px; font-size: 2.2rem; font-weight: 700;">
+                        {{ agent.first_name|first|default:agent.email|first|upper }}{{ agent.last_name|first|default:""|upper }}
+                    </div>
+                    <h3 class="h4 mb-1 fw-bold">
+                        {% if agent.first_name or agent.last_name %}
+                            {{ agent.last_name }} {{ agent.first_name }}
+                        {% else %}
+                            Người vận hành UAV
+                        {% endif %}
+                    </h3>
+                    <p class="text-muted small mb-3">{{ agent.email }}</p>
+
+                    <div>
+                        {% if agent.is_active %}
+                            <span class="badge bg-success px-3 py-2 fs-6">
+                                <i class="bi bi-check-circle-fill me-1"></i> Tài khoản đang hoạt động
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary px-3 py-2 fs-6">
+                                <i class="bi bi-x-circle-fill me-1"></i> Chưa kích hoạt
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="text-start">
+                        <div class="mb-3">
+                            <label class="text-muted small text-uppercase fw-semibold mb-1">
+                                <i class="bi bi-telephone text-primary me-1"></i> Số điện thoại
+                            </label>
+                            <div class="fw-medium">
+                                {% if agent.agentprofile.phone_number %}
+                                    <a href="tel:{{ agent.agentprofile.phone_number }}" class="text-decoration-none text-dark">
+                                        {{ agent.agentprofile.phone_number }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Chưa cập nhật</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="text-muted small text-uppercase fw-semibold mb-1">
+                                <i class="bi bi-geo-alt text-primary me-1"></i> Trạm / Khu vực làm việc
+                            </label>
+                            <div class="fw-medium">
+                                {% if agent.agentprofile.address %}
+                                    {{ agent.agentprofile.address }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Chưa cập nhật</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="text-muted small text-uppercase fw-semibold mb-1">
+                                <i class="bi bi-calendar-event text-primary me-1"></i> Ngày tham gia hệ thống
+                            </label>
+                            <div class="fw-medium">
+                                {% if agent.agentprofile.hire_date %}
+                                    {{ agent.agentprofile.hire_date|date:"d/m/Y" }}
+                                {% else %}
+                                    {{ agent.date_joined|date:"d/m/Y" }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="mailto:{{ agent.email }}" class="btn btn-outline-primary">
+                            <i class="bi bi-envelope me-1"></i> Gửi Email liên hệ
+                        </a>
+                        {% if agent.agentprofile.phone_number %}
+                        <a href="tel:{{ agent.agentprofile.phone_number }}" class="btn btn-outline-primary">
+                            <i class="bi bi-telephone me-1"></i> Gọi điện khẩn cấp
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assigned Zones Card -->
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0 h-100">
+                <div class="card-header {% get_role_bg user %} text-white py-3">
+                    <h4 class="mb-0">
+                        <i class="bi bi-geo-alt-fill me-2"></i> Phân khu tuần tra UAV được phân công phụ trách
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    {% if assigned_zones %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><i class="bi bi-pentagon me-1"></i> Phân khu</th>
+                                    <th><i class="bi bi-folder me-1"></i> Thuộc Dự án</th>
+                                    <th><i class="bi bi-camera-video me-1"></i> Camera UAV</th>
+                                    <th class="text-center"><i class="bi bi-gear me-1"></i> Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for z in assigned_zones %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-primary">
+                                            <i class="bi bi-geo-alt me-1"></i>{{ z.name_zone }}
+                                        </div>
+                                        <small class="text-muted">{{ z.description_zone|truncatewords:8|default:"Không có mô tả" }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            {{ z.name_project.name }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info-emphasis border border-info">
+                                            {{ z.cameras.count }} camera UAV
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'projects:project_detail' z.name_project.id %}" class="btn btn-outline-primary" title="Xem chi tiết dự án">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            {% if z.cameras.exists %}
+                                            <a href="{% url 'agents:stream_cam' z.Zone_ID %}" class="btn btn-primary" title="Xem luồng trực tiếp phân khu này">
+                                                <i class="bi bi-play-circle me-1"></i> Trực tiếp
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-geo-alt display-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">Người vận hành này chưa được phân công phân khu nào</h5>
+                        <p class="text-muted small mb-4">Điều phối viên giám sát có thể phân công người vận hành trực tiếp trong trang Chi tiết Dự án theo từng phân khu.</p>
+                        <a href="{% url 'projects:project_list' %}" class="btn btn-primary">
+                            <i class="bi bi-folder-plus me-1"></i> Đến danh sách Dự án
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back button -->
+    <div class="mt-4">
+        <a href="{% url 'agents:agent_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách Người vận hành
+        </a>
+    </div>
+</div>
+{% endblock %}
+

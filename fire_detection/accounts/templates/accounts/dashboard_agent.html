@@ -1,0 +1,333 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+{% load json_filters %}
+
+{% block title %}Bảng điều khiển Người vận hành UAV - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'agent_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'agent_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+
+<style>
+    #map {
+        height: 600px;
+        width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .stats-card {
+        transition: transform 0.2s;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .filter-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .zone-popup {
+        min-width: 250px;
+    }
+    
+    .zone-popup h6 {
+        margin-bottom: 10px;
+        color: #333;
+        font-weight: 600;
+    }
+    
+    .zone-popup .info-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .zone-popup .info-row i {
+        margin-right: 8px;
+        color: #6c757d;
+    }
+    
+    .leaflet-popup-content {
+        margin: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-2">
+                <i class="bi bi-person-badge text-primary me-2"></i> Bảng điều khiển Người vận hành UAV
+            </h2>
+            <p class="text-muted mb-0">Theo dõi bản đồ tọa độ vùng bay, trạng thái các camera UAV và luồng truyền hình ảnh thời gian thực</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Dự án được phân công</h6>
+                            <h3 class="mb-0 text-primary">{{ projects.count }}</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-folder text-primary fs-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Vùng tuần tra phụ trách</h6>
+                            <h3 class="mb-0 text-primary">{{ total_zones }}</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-geo-alt text-primary fs-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Camera UAV kết nối</h6>
+                            <h3 class="mb-0 text-primary">{{ total_cameras }}</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-camera-video text-primary fs-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="filter-section">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <label for="projectFilter" class="form-label fw-semibold mb-2">
+                            <i class="bi bi-funnel me-1"></i> Lọc theo Dự án tuần tra
+                        </label>
+                        <select id="projectFilter" class="form-select">
+                            <option value="all">Tất cả các dự án</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold mb-2">
+                            <i class="bi bi-info-circle me-1"></i> Chú thích bản đồ
+                        </label>
+                        <div class="d-flex gap-3">
+                            <span class="badge bg-primary px-3 py-2">
+                                <i class="bi bi-geo-alt-fill me-1"></i> Ranh giới vùng bay
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-map me-2"></i> Bản đồ Vùng tuần tra & Vị trí Camera UAV
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script>
+    // Parse projects data from Django
+    let projectsData = [];
+    
+    try {
+        const rawData = '{{ projects_json|safe }}';
+        projectsData = JSON.parse(rawData);
+        console.log('✅ Projects data parsed successfully');
+    } catch (e) {
+        console.error('❌ Error parsing projects data:', e);
+        const mapDiv = document.getElementById('map');
+        mapDiv.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <h5>❌ Lỗi tải dữ liệu vùng bay</h5>
+                <p>Không thể nạp danh sách các vùng tuần tra. Hãy kiểm tra console (F12).</p>
+            </div>
+        `;
+    }
+
+    // Initialize map
+    const map = L.map('map').setView([36.8065, 10.1815], 10);
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri World Imagery',
+        maxZoom: 19
+    });
+
+    const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        maxZoom: 19
+    });
+
+    satelliteLayer.addTo(map);
+
+    L.control.layers({
+        "Vệ tinh (Satellite)": satelliteLayer,
+        "Bản đồ nền (Streets)": streetLayer
+    }, null, { position: 'topright' }).addTo(map);
+
+    let zoneLayers = [];
+    let allZoneBounds = [];
+
+    const colors = ['#3388ff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#95e1d3', '#f38181'];
+
+    const projectFilter = document.getElementById('projectFilter');
+    projectsData.forEach((project, index) => {
+        const option = document.createElement('option');
+        option.value = project.id;
+        option.textContent = `${project.name} (${project.zone_count} vùng)`;
+        projectFilter.appendChild(option);
+    });
+
+    function createPopupContent(zone, project) {
+        const streamUrl = "{% url 'agents:stream_cam' 0 %}".replace('0', zone.id);
+
+        return `
+            <div class="zone-popup">
+                <h6><i class="bi bi-geo-alt-fill text-primary me-1"></i> ${zone.name}</h6>
+                <div class="info-row"><i class="bi bi-folder me-1"></i> <span><strong>Dự án:</strong> ${project.name}</span></div>
+                <div class="info-row"><i class="bi bi-camera-video me-1"></i> <span><strong>Camera UAV:</strong> ${zone.camera_count} camera</span></div>
+                ${zone.description ? `<div class="info-row"><i class="bi bi-info-circle me-1"></i> <span>${zone.description}</span></div>` : ''}
+                <hr class="my-2">
+                <a href="${streamUrl}" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-play-circle me-1"></i> Xem luồng trực tiếp (Live Stream)
+                </a>
+            </div>
+        `;
+    }
+
+    function addPolygon(ringCoords, projectColor, zone, project) {
+        const latlngs = ringCoords.map(pt => [pt[1], pt[0]]);
+        const polygon = L.polygon(latlngs, {
+            color: projectColor,
+            fillColor: projectColor,
+            fillOpacity: 0.2,
+            weight: 2,
+            projectId: project.id
+        }).addTo(map);
+
+        polygon.bindPopup(createPopupContent(zone, project), { maxWidth: 300 });
+
+        polygon.on('mouseover', () => polygon.setStyle({ fillOpacity: 0.4, weight: 3 }));
+        polygon.on('mouseout', () => polygon.setStyle({ fillOpacity: 0.2, weight: 2 }));
+        polygon.on('click', () => polygon.openPopup());
+
+        zoneLayers.push({ layer: polygon, projectId: project.id, zoneName: zone.name });
+        allZoneBounds.push(polygon.getBounds());
+    }
+
+    let zonesAdded = 0;
+    let zonesSkipped = 0;
+
+    projectsData.forEach((project, projectIndex) => {
+        const projectColor = colors[projectIndex % colors.length];
+
+        project.zones.forEach(zone => {
+            if (!zone.coords || !zone.coords.type || !zone.coords.coordinates) {
+                console.warn(`⚠️ Bỏ qua vùng (tọa độ không hợp lệ): ${zone.name}`);
+                zonesSkipped++;
+                return;
+            }
+
+            try {
+                if (zone.coords.type === 'Polygon') {
+                    zone.coords.coordinates.forEach(ring => addPolygon(ring, projectColor, zone, project));
+                } else if (zone.coords.type === 'MultiPolygon') {
+                    zone.coords.coordinates.forEach(polygonCoords => {
+                        polygonCoords.forEach(ring => addPolygon(ring, projectColor, zone, project));
+                    });
+                } else {
+                    console.warn(`⚠️ Loại tọa độ không hỗ trợ: ${zone.coords.type}`);
+                    zonesSkipped++;
+                }
+
+                zonesAdded++;
+            } catch (err) {
+                console.error(`❌ Lỗi khi thêm vùng ${zone.name}:`, err);
+                zonesSkipped++;
+            }
+        });
+    });
+
+    if (allZoneBounds.length > 0) {
+        const group = new L.featureGroup(zoneLayers.map(z => z.layer));
+        map.fitBounds(group.getBounds().pad(0.1));
+    }
+
+    projectFilter.addEventListener('change', function() {
+        const selectedProject = this.value;
+
+        zoneLayers.forEach(item => {
+            if (selectedProject === 'all' || item.projectId == selectedProject) {
+                map.addLayer(item.layer);
+            } else {
+                map.removeLayer(item.layer);
+            }
+        });
+
+        const visibleLayers = zoneLayers
+            .filter(item => selectedProject === 'all' || item.projectId == selectedProject)
+            .map(item => item.layer);
+
+        if (visibleLayers.length > 0) {
+            const group = new L.featureGroup(visibleLayers);
+            map.fitBounds(group.getBounds().pad(0.1));
+        }
+    });
+</script>
+{% endblock %}

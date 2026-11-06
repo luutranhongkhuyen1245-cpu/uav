@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Bảng điều khiển Quản trị viên hệ thống - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'admin_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'admin_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'manage_users' %}">
+            <i class="bi bi-people me-1"></i> Quản lý Người dùng
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'manage_projects' %}">
+            <i class="bi bi-folder me-1"></i> Quản lý Dự án
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-lg border-0 mb-4">
+                <div class="card-body p-4">
+                    <h2 class="card-title h3 mb-2 text-primary fw-bold">
+                        <i class="bi bi-shield-lock me-2"></i> Bảng điều khiển Quản trị hệ thống
+                    </h2>
+                    <p class="text-muted mb-4">
+                        <i class="bi bi-info-circle me-1"></i> Chào mừng bạn quay trở lại! Bạn đang đăng nhập với quyền hạn cao nhất: <strong>Quản trị viên (Admin)</strong>.
+                    </p>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <a href="{% url 'manage_users' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-people me-2"></i> Quản lý Người dùng & Phân quyền
+                        </a>
+                        <a href="{% url 'manage_projects' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-folder me-2"></i> Quản lý Dự án tuần tra
+                        </a>
+                        <a href="{% url 'projects:alert_list' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-exclamation-triangle me-2"></i> Lịch sử Sự cố Cháy
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Project Card (Chức năng Tạo dự án mới) -->
+            <div class="card shadow-lg border-0 mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h4 class="h5 mb-0 text-primary fw-bold">
+                        <i class="bi bi-plus-circle me-2"></i> Tạo dự án mới
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-dark">
+                                <i class="bi bi-folder me-1 text-primary"></i> Tên dự án
+                            </label>
+                            {{ form.name }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-dark">
+                                <i class="bi bi-person-badge me-1 text-primary"></i> Điều phối viên giám sát phụ trách
+                            </label>
+                            {{ form.supervisor }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-dark">
+                                <i class="bi bi-card-text me-1 text-primary"></i> Mục tiêu / Mô tả
+                            </label>
+                            {{ form.description }}
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="bi bi-save me-2"></i> Tạo dự án mới
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

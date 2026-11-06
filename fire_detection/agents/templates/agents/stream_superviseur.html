@@ -1,0 +1,470 @@
+<!-- agents/templates/agents/stream_superviseur.html -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <title>Giám sát Camera UAV - Vùng {{ zone_id }}</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">  
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body { background-color: #f8f9fa; }
+        .stream-container {
+            position: relative; background-color: #000; min-height: 300px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 0.25rem; overflow: hidden;
+        }
+        .stream-img {
+            width: 100%; height: auto; max-height: 500px;
+            object-fit: contain; display: block;
+        }
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 1.2rem;
+        }
+        .card { box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); margin-bottom: 1.5rem; }
+        .card-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .status-indicator {
+            display: inline-block; width: 10px; height: 10px;
+            border-radius: 50%; margin-right: 5px;
+        }
+        .status-live {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        .fire-alarm-active {
+            border: 3px solid #dc3545 !important;
+            box-shadow: 0 0 20px rgba(220, 53, 69, 0.8) !important;
+            animation: alarmPulse 1s infinite alternate;
+        }
+        @keyframes alarmPulse {
+            from { box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+            to { box-shadow: 0 0 25px rgba(220, 53, 69, 1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-3">
+        <!-- Emergency Alarm Banner -->
+        <div id="emergency-banner" class="alert alert-danger shadow-lg d-none align-items-center justify-content-between p-3 mb-4 rounded-3 border-danger" role="alert" style="background-color: #f8d7da; border-width: 2px;">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-fire fa-2x text-danger mr-3 animate__animated animate__heartBeat animate__infinite"></i>
+                <div>
+                    <h5 class="alert-heading mb-1 text-danger font-weight-bold">
+                        🔥 CẢNH BÁO KHẨN CẤP: PHÁT HIỆN LỬA / KHÓI TỪ CAMERA UAV!
+                    </h5>
+                    <div id="emergency-details" class="small text-dark font-weight-bold">
+                        Hệ thống AI đã tự động chụp ảnh minh chứng và lưu vào danh sách sự cố.
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button id="btn-toggle-sound" class="btn btn-warning btn-sm font-weight-bold mr-2" onclick="toggleMute()">
+                    <i class="fas fa-volume-up"></i> Tắt chuông báo
+                </button>
+                <a href="{% url 'projects:alert_list' %}" class="btn btn-danger btn-sm font-weight-bold" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> Xem lịch sử sự cố
+                </a>
+            </div>
+        </div>
+
+        <div class="row mb-3 align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-video text-primary"></i> GIÁM SÁT TRỰC TIẾP CAMERA UAV - VÙNG {{ zone.name_zone|default:zone_id }}</h2>
+                <p class="text-muted mb-0">
+                    <i class="fas fa-satellite-dish text-success mr-1"></i> UAV Trực chiến: <strong>{{ active_camera.name_cam|default:"Chưa có" }}</strong> | 
+                    Dự phòng: <strong>{{ standby_cameras|length }} UAV</strong> | 
+                    Mô hình AI: <strong>FireShield YOLO</strong>
+                </p>
+            </div>
+            <div class="col-md-4 text-md-right">
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm mr-2" title="Quay về bảng điều khiển">
+                    <i class="fas fa-arrow-left"></i> Về Dashboard
+                </a>
+                {% if zone and zone.name_project and user.user_type != 'agent' %}
+                <a href="{% url 'projects:project_detail' zone.name_project.id %}" class="btn btn-outline-primary btn-sm mr-2" title="Quay về trang quản lý dự án này">
+                    <i class="fas fa-folder-open"></i> Chi tiết Dự án
+                </a>
+                {% endif %}
+                <a href="{% url 'projects:alert_list' %}" class="btn btn-danger btn-sm">
+                    <i class="fas fa-exclamation-triangle"></i> Lịch sử sự cố
+                </a>
+            </div>
+        </div>
+        
+        <div class="row">
+            {% if active_camera %}
+                <!-- Cột Trái: Luồng Camera UAV Lớn (UAV Trực chiến) -->
+                <div class="col-lg-8 mb-4">
+                    <div class="card shadow transition-all border-0" id="cam-card-{{ active_camera.cam_ID }}">
+                        <div class="card-header text-white bg-primary d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <span class="status-indicator status-live"></span>
+                                {{ active_camera.name_cam }} (UAV Trực chiến - Đang bay)
+                            </h5>
+                            <div>
+                                <span class="badge badge-success mr-2 font-weight-bold">
+                                    <i class="fas fa-plane mr-1"></i> LIVE
+                                </span>
+                                <span class="badge badge-light text-primary font-weight-bold">
+                                    <i class="fas fa-satellite-dish mr-1"></i> ID UAV: {{ active_camera.cam_ID }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="stream-container" id="stream-{{ active_camera.cam_ID }}" style="min-height: 480px;">
+                                <div class="loading-overlay">
+                                    <div class="text-center">
+                                        <i class="fas fa-spinner fa-spin fa-3x mb-2 text-white"></i>
+                                        <div>Đang kết nối luồng video UAV...</div>
+                                    </div>
+                                </div>
+                                <img src="{% url 'agents:video_feed' active_camera.cam_ID %}" 
+                                     class="stream-img" 
+                                     data-cam-id="{{ active_camera.cam_ID }}"
+                                     alt="Luồng video {{ active_camera.name_cam }}"
+                                     style="max-height: 600px;"
+                                     onload="hideLoading({{ active_camera.cam_ID }})"
+                                     onerror="handleError({{ active_camera.cam_ID }})">
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white d-flex justify-content-between align-items-center small text-muted">
+                            <div>
+                                <i class="fas fa-map-marker-alt text-danger mr-1"></i> Phân khu: <strong>{{ zone.name_zone }}</strong> (Dự án: {{ zone.name_project.name }})
+                            </div>
+                            <div>
+                                <i class="fas fa-video mr-1"></i> Nguồn: {% if active_camera.is_full_rtsp_url %}{{ active_camera.custom_url }}{% else %}{{ active_camera.adresse_cam }}:{{ active_camera.num_port }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cột Phải: Tactical Switcher & Nhật ký sự cố -->
+                <div class="col-lg-4 mb-4">
+                    <!-- Thẻ 1: Đội bay UAV & Cất cánh thay thế (Tactical Standby Switcher) -->
+                    <div class="card shadow-sm border-0 mb-3">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+                            <h6 class="mb-0 font-weight-bold"><i class="fas fa-satellite-dish mr-1"></i> Đội bay UAV Phân khu</h6>
+                            <span class="badge badge-light text-primary font-weight-bold">{{ standby_cameras|length|add:1 }} UAV</span>
+                        </div>
+                        <div class="card-body p-3">
+                            <!-- UAV Trực chiến hiện tại -->
+                            <div class="p-2 mb-2 bg-success text-white rounded d-flex justify-content-between align-items-center shadow-sm">
+                                <div>
+                                    <div class="font-weight-bold"><i class="fas fa-plane mr-1"></i> {{ active_camera.name_cam }}</div>
+                                    <small class="text-light" style="font-size: 11px;">Đang bay tuần tra & xử lý AI</small>
+                                </div>
+                                <span class="badge badge-light text-success font-weight-bold">Trực chiến</span>
+                            </div>
+
+                            <!-- Danh sách UAV Dự phòng -->
+                            {% if standby_cameras %}
+                                <div class="small text-muted font-weight-bold mb-2 mt-3">
+                                    <i class="fas fa-shield-alt mr-1"></i> UAV Dự phòng sẵn sàng ({{ standby_cameras|length }}):
+                                </div>
+                                <div class="d-flex flex-column gap-2" style="max-height: 200px; overflow-y: auto;">
+                                    {% for standby in standby_cameras %}
+                                    <div class="p-2 bg-light rounded border d-flex justify-content-between align-items-center mb-2">
+                                        <div style="max-width: {% if user.user_type == 'agent' %}60%{% else %}75%{% endif %};">
+                                            <div class="font-weight-bold text-dark small text-truncate">
+                                                <i class="fas fa-circle text-secondary mr-1" style="font-size: 8px;"></i>
+                                                {{ standby.name_cam }}
+                                            </div>
+                                            <small class="text-muted text-truncate d-block" style="font-size: 11px;" title="{% if standby.is_full_rtsp_url %}{{ standby.custom_url }}{% else %}{{ standby.adresse_cam }}{% endif %}">
+                                                {% if standby.is_full_rtsp_url %}{{ standby.custom_url }}{% else %}{{ standby.adresse_cam }}{% endif %}
+                                            </small>
+                                        </div>
+                                        {% if user.user_type == 'agent' %}
+                                        <form method="post" action="{% url 'projects:switch_camera' zone.Zone_ID standby.cam_ID %}" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="btn btn-warning btn-sm font-weight-bold shadow-sm" title="Kích hoạt UAV này cất cánh thay thế ngay">
+                                                <i class="fas fa-plane-departure"></i> Cất cánh 🔄
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <span class="badge badge-secondary py-1 px-2 small font-weight-normal">
+                                            <i class="fas fa-pause-circle mr-1"></i> Dự phòng
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-muted small text-center py-2 border rounded bg-light mt-2">
+                                    <i class="fas fa-info-circle mr-1"></i> Phân khu này chưa có UAV dự phòng
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Thẻ 3: Nhật ký Sự cố Phát hiện Thời gian thực -->
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center py-2">
+                            <h6 class="mb-0 font-weight-bold"><i class="fas fa-fire-extinguisher mr-1"></i> Nhật ký Sự cố Chuyến bay</h6>
+                            <a href="{% url 'projects:alert_list' %}" class="badge badge-light text-danger" target="_blank">Xem tất cả</a>
+                        </div>
+                        <div class="card-body p-2" id="session-incidents-feed" style="max-height: 300px; overflow-y: auto;">
+                            <div class="text-center text-muted small py-3" id="no-incidents-msg">
+                                <i class="fas fa-check-circle text-success fa-2x mb-2 d-block"></i>
+                                Khu vực an toàn. Chưa phát hiện sự cố cháy/khói.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% else %}
+                <div class="col-12">
+                    <div class="alert alert-warning text-center p-5 shadow-sm rounded border" role="alert">
+                        <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3 d-block"></i>
+                        <h4 class="alert-heading font-weight-bold">Chưa có Camera UAV nào được cấu hình cho phân khu này!</h4>
+                        <p class="text-muted">Vui lòng thêm Camera UAV cho phân khu để bắt đầu chuyến bay tuần tra và giám sát phòng chống cháy rừng.</p>
+                        <hr>
+                        <a href="{% url 'projects:add_cam' zone.Zone_ID %}" class="btn btn-primary font-weight-bold">
+                            <i class="fas fa-plus-circle mr-1"></i> Cấu hình Camera UAV ngay
+                        </a>
+                        <a href="{% url 'projects:project_detail' zone.name_project.id %}" class="btn btn-outline-secondary ml-2">
+                            <i class="fas fa-arrow-left mr-1"></i> Về chi tiết dự án
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function hideLoading(camId) {
+            const container = document.getElementById('stream-' + camId);
+            if (container) {
+                const overlay = container.querySelector('.loading-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+            console.log('Stream chargé pour caméra ID:', camId);
+        }
+        
+        function handleError(camId) {
+            const container = document.getElementById('stream-' + camId);
+            if (container) {
+                const overlay = container.querySelector('.loading-overlay');
+                if (overlay) {
+                    overlay.innerHTML = '<div><i class="fas fa-exclamation-triangle fa-2x mb-2 text-danger"></i><div>Lỗi kết nối hoặc không tìm thấy video</div></div>';
+                }
+            }
+            console.error('Erreur de chargement du stream pour caméra ID:', camId);
+        }
+
+        // Tự động kiểm tra và ẩn overlay khi luồng video đã bắt đầu nhận dữ liệu
+        document.addEventListener("DOMContentLoaded", function() {
+            document.querySelectorAll('.stream-img').forEach(function(img) {
+                img.addEventListener('load', function() {
+                    const id = img.getAttribute('data-cam-id');
+                    if (id) hideLoading(id);
+                });
+                let checkCount = 0;
+                const timer = setInterval(function() {
+                    checkCount++;
+                    if (img.naturalWidth > 0) {
+                        const id = img.getAttribute('data-cam-id');
+                        if (id) hideLoading(id);
+                        clearInterval(timer);
+                    }
+                    if (checkCount > 10) clearInterval(timer);
+                }, 300);
+            });
+
+            // Bắt đầu vòng lặp kiểm tra Cảnh báo cháy thời gian thực
+            initRealtimeFireAlerts();
+        });
+
+        // ================= CẢNH BÁO CHÁY THỜI GIAN THỰC (AUDIO & POLLING) =================
+        let isMuted = false;
+        let audioCtx = null;
+        let alarmActive = false;
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('btn-toggle-sound');
+            if (btn) {
+                btn.innerHTML = isMuted ? '<i class="fas fa-volume-mute"></i> Đã tắt chuông' : '<i class="fas fa-volume-up"></i> Tắt chuông báo';
+                btn.className = isMuted ? 'btn btn-secondary btn-sm font-weight-bold mr-2' : 'btn btn-warning btn-sm font-weight-bold mr-2';
+            }
+        }
+
+        function playSirenBeep() {
+            if (isMuted) return;
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1400, audioCtx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
+            } catch (e) {
+                console.warn("Audio Context error:", e);
+            }
+        }
+
+        function initRealtimeFireAlerts() {
+            const emergencyBanner = document.getElementById('emergency-banner');
+            const detailsDiv = document.getElementById('emergency-details');
+
+            // Danh sách ID các camera đang hiển thị trên trang
+            const camIds = [];
+            document.querySelectorAll('.stream-img').forEach(function(img) {
+                const id = img.getAttribute('data-cam-id');
+                if (id && !camIds.includes(id)) camIds.push(id);
+            });
+
+            if (camIds.length === 0) return;
+
+            let anyFireDetected = false;
+            const knownIncidentIds = new Set();
+
+            function updateIncidentFeed(alert) {
+                if (!alert || !alert.id) return;
+                if (knownIncidentIds.has(alert.id)) {
+                    const item = document.getElementById('incident-item-' + alert.id);
+                    if (item) {
+                        const lbl = item.querySelector('.incident-label');
+                        if (lbl) lbl.innerText = alert.label;
+                        const conf = item.querySelector('.incident-conf');
+                        if (conf) conf.innerText = alert.confidence;
+                    }
+                    return;
+                }
+                knownIncidentIds.add(alert.id);
+                const feed = document.getElementById('session-incidents-feed');
+                const noMsg = document.getElementById('no-incidents-msg');
+                if (noMsg) noMsg.style.display = 'none';
+
+                const countBadge = document.getElementById('session-alert-count');
+                if (countBadge) {
+                    const current = parseInt(countBadge.innerText.trim()) || 0;
+                    countBadge.innerText = current + 1;
+                }
+
+                const videoTimeStr = alert.video_time ? `<span class="badge badge-secondary mr-1">Video: ${alert.video_time}</span>` : '';
+                const imgTag = alert.evidence_url ? `<img src="${alert.evidence_url}" class="rounded mr-2" style="width: 48px; height: 36px; object-fit: cover;">` : '';
+
+                const div = document.createElement('div');
+                div.id = 'incident-item-' + alert.id;
+                div.className = 'd-flex align-items-center justify-content-between p-2 mb-2 bg-light rounded border-left border-danger';
+                div.style.borderLeftWidth = '4px !important';
+                div.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        ${imgTag}
+                        <div>
+                            <div class="font-weight-bold text-danger small incident-label">${alert.label}</div>
+                            <div class="text-muted" style="font-size: 11px;">${videoTimeStr}lúc ${alert.time}</div>
+                        </div>
+                    </div>
+                    <span class="badge badge-danger incident-conf font-weight-bold">${alert.confidence}</span>
+                `;
+                if (feed) feed.prepend(div);
+            }
+
+            function pollAlertStatus() {
+                let currentPollFires = 0;
+                let promises = camIds.map(function(camId) {
+                    return fetch(`/agents/api/alert_status/${camId}/`)
+                        .then(response => response.json())
+                        .then(data => {
+                            const card = document.getElementById('cam-card-' + camId);
+                            if (data.fire_detected) {
+                                currentPollFires++;
+                                if (card) card.classList.add('fire-alarm-active');
+                                
+                                if (data.alert && detailsDiv) {
+                                    const timeStr = data.alert.video_time ? ` (Mốc video: ${data.alert.video_time})` : '';
+                                    detailsDiv.innerHTML = `Phát hiện: <strong class="text-danger">${data.alert.label} (${data.alert.confidence})</strong>${timeStr} lúc ${data.alert.time}. Đã lưu ảnh minh chứng tự động vào CSDL!`;
+                                }
+                                if (data.alert) {
+                                    updateIncidentFeed(data.alert);
+                                }
+                            } else {
+                                if (card) card.classList.remove('fire-alarm-active');
+                            }
+                            return data.fire_detected;
+                        })
+                        .catch(err => {
+                            console.debug("Poll error for cam " + camId, err);
+                            return false;
+                        });
+                });
+
+                Promise.all(promises).then(results => {
+                    const hasFire = results.some(Boolean);
+                    if (hasFire) {
+                        if (emergencyBanner) {
+                            emergencyBanner.classList.remove('d-none');
+                            emergencyBanner.classList.add('d-flex');
+                            emergencyBanner.style.display = 'flex';
+                        }
+                        playSirenBeep();
+                    } else {
+                        if (emergencyBanner) {
+                            emergencyBanner.classList.remove('d-flex');
+                            emergencyBanner.classList.add('d-none');
+                            emergencyBanner.style.display = 'none';
+                        }
+                    }
+                });
+            }
+
+            // Gọi ngay lập tức lần đầu tiên khi tải trang
+            pollAlertStatus();
+
+            // Polling định kỳ mỗi 1.5 giây
+            setInterval(pollAlertStatus, 1500);
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Tente de recharger les images en erreur toutes les 30 secondes
+        setInterval(function() {
+            document.querySelectorAll('.stream-img').forEach(function(img) {
+                // Vérifie si l'image a échoué à charger (naturalWidth est 0 en cas d'erreur)
+                if (img.naturalWidth === 0) {
+                    console.log('Tentative de reconnexion pour:', img.alt);
+                    // Ajoute un timestamp pour forcer le rechargement sans cache
+                    img.src = img.src.split('?')[0] + '?t=' + new Date().getTime();
+                }
+            });
+        }, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Danh sách Người vận hành UAV - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'agents:agent_list' %}">
+            <i class="bi bi-people me-1"></i> Người vận hành UAV
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+        </a>
+    </li>
+</ul>
+{% if user.user_type == 'admin' %}
+<ul class="navbar-nav">
+    <li class="nav-item">
+        <a class="nav-link btn btn-primary text-white btn-sm px-3" href="{% url 'agents:add_agent' %}">
+            <i class="bi bi-person-plus me-1"></i> Thêm Người vận hành
+        </a>
+    </li>
+</ul>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Page Header -->
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="h2 mb-2 text-primary">
+                        <i class="bi bi-people-fill me-2"></i> Đội ngũ Người vận hành UAV
+                    </h1>
+                    <p class="text-muted mb-0">Quản lý và điều phối Người vận hành UAV tuần tra phòng cháy</p>
+                </div>
+                {% if user.user_type == 'admin' %}
+                <a href="{% url 'agents:add_agent' %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-person-plus me-2"></i> Thêm Người vận hành mới
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Tổng số Người vận hành UAV</p>
+                            <h2 class="h3 mb-0 text-primary">{{ total_agents }}</h2>
+                        </div>
+                        <div class="text-primary">
+                            <i class="bi bi-people fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Đang hoạt động</p>
+                            <h2 class="h3 mb-0 text-success">{{ active_accounts }}</h2>
+                        </div>
+                        <div class="text-success">
+                            <i class="bi bi-check-circle fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Chưa kích hoạt / Dừng</p>
+                            <h2 class="h3 mb-0 text-secondary">{{ inactive_count }}</h2>
+                        </div>
+                        <div class="text-secondary">
+                            <i class="bi bi-pause-circle fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agents Table -->
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-list-ul me-2"></i> Danh sách Người vận hành UAV
+                </h4>
+                <span class="badge bg-light text-dark fs-6">{{ total_agents }} nhân sự</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if agents %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4 py-3"><i class="bi bi-person me-2"></i> Người vận hành</th>
+                            <th class="px-4 py-3"><i class="bi bi-telephone me-2"></i> Điện thoại liên hệ</th>
+                            <th class="px-4 py-3"><i class="bi bi-geo-alt me-2"></i> Trạm / Khu vực</th>
+                            <th class="px-4 py-3"><i class="bi bi-calendar-event me-2"></i> Ngày tham gia</th>
+                            <th class="px-4 py-3"><i class="bi bi-shield-check me-2"></i> Trạng thái tài khoản</th>
+                            <th class="px-4 py-3"><i class="bi bi-gear me-2"></i> Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for agent in agents %}
+                        <tr>
+                            <!-- Agent Info -->
+                            <td class="px-4 py-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="rounded bg-primary text-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; font-weight: 700; font-size: 1.1rem;">
+                                        {{ agent.first_name|first|default:agent.email|first|upper }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-semibold">
+                                            {% if agent.first_name or agent.last_name %}
+                                                {{ agent.last_name }} {{ agent.first_name }}
+                                            {% else %}
+                                                <span class="text-muted">Chưa cập nhật tên</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-muted small">
+                                            <i class="bi bi-envelope me-1"></i> {{ agent.email }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            <!-- Contact Info -->
+                            <td class="px-4 py-3">
+                                {% if agent.agentprofile and agent.agentprofile.phone_number %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-telephone-fill text-primary me-1"></i>
+                                        <span>{{ agent.agentprofile.phone_number }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">
+                                        <i class="bi bi-dash-circle me-1"></i> Chưa có
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Address -->
+                            <td class="px-4 py-3">
+                                {% if agent.agentprofile and agent.agentprofile.address %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-geo-alt-fill text-primary me-1"></i>
+                                        <span class="small">{{ agent.agentprofile.address|truncatewords:8 }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">
+                                        <i class="bi bi-dash-circle me-1"></i> Chưa có
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Hire Date -->
+                            <td class="px-4 py-3">
+                                {% if agent.agentprofile %}
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <i class="bi bi-calendar-check text-primary me-1"></i>
+                                        <span>{{ agent.agentprofile.hire_date|date:"d/m/Y" }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">
+                                        <i class="bi bi-dash-circle me-1"></i> Chưa có hồ sơ
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Account Activation Status -->
+                            <td class="px-4 py-3">
+                                {% if agent.is_active %}
+                                    <span class="badge bg-success px-2 py-1">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Đang hoạt động
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary px-2 py-1">
+                                        <i class="bi bi-x-circle-fill me-1"></i> Chưa kích hoạt
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Actions -->
+                            <td class="px-4 py-3">
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'agents:agent_detail' agent.id %}" class="btn btn-outline-primary btn-sm" title="Xem chi tiết hồ sơ và dự án phân công">
+                                        <i class="bi bi-eye me-1"></i> Chi tiết
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <div class="mb-3">
+                    <i class="bi bi-people display-1 {% get_role_text user %}"></i>
+                </div>
+                <h3 class="text-muted">Chưa có người vận hành nào</h3>
+                <p class="text-muted mb-4">Hiện tại chưa có Người vận hành UAV nào trong hệ thống.</p>
+                {% if user.user_type == 'admin' %}
+                <a href="{% url 'agents:add_agent' %}" class="btn {% get_role_btn user %} btn-lg">
+                    <i class="bi bi-person-plus me-2"></i> Thêm Người vận hành đầu tiên
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

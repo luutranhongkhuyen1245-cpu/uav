@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Thiết lập Phân khu tuần tra - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css">
+<style>
+    #map {
+        height: 560px;
+        border-radius: 12px;
+        z-index: 1;
+    }
+    .zone-label-tooltip {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        padding: 4px 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="card border-0 {% get_role_bg user %} text-white mb-4 shadow-lg">
+        <div class="card-body py-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="bi bi-geo-alt me-2"></i> Thiết lập Phân khu tuần tra
+                    </h1>
+                    <p class="mb-0 opacity-90">Vẽ ranh giới các phân khu (Zone/Sector) cần giám sát phòng cháy trên bản đồ số thuộc dự án.</p>
+                </div>
+                <div>
+                    <span class="badge bg-white text-primary px-3 py-2 fs-6 fw-bold shadow-sm">
+                        <i class="bi bi-layers me-1"></i> Bước 2 / 3
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-4">
+            <!-- Cột trái: Thông tin phân khu & Danh sách phân khu -->
+            <div class="col-lg-5">
+                <div class="card shadow-lg border-0 h-100">
+                    <div class="card-body p-4 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <span class="badge {% get_role_badge user %} rounded-pill px-3 py-2 fs-6">
+                                    <i class="bi bi-diagram-3 me-2"></i>
+                                    Dự án: <span class="fw-semibold">{{ votre_projet }}</span>
+                                </span>
+                                <span class="badge bg-light text-muted border">
+                                    Đã có {{ zones|length }} phân khu
+                                </span>
+                            </div>
+
+                            {% if zones %}
+                            <!-- Danh sách các phân khu đã tạo trước đó -->
+                            <div class="mb-4 p-3 bg-light rounded-3 border">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold small text-uppercase text-secondary">
+                                        <i class="bi bi-layers-fill text-primary me-1"></i> Phân khu đã lưu ({{ zones|length }})
+                                    </span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">Hiển thị trên bản đồ</span>
+                                </div>
+                                <div class="d-flex flex-column gap-2" style="max-height: 160px; overflow-y: auto;">
+                                    {% for z in zones %}
+                                    <div class="d-flex align-items-center justify-content-between p-2 bg-white rounded border shadow-sm small">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge rounded-circle bg-primary text-white" style="width: 22px; height: 22px; line-height: 16px; font-size: 11px;">{{ forloop.counter }}</span>
+                                            <span class="fw-semibold text-dark">{{ z.name_zone }}</span>
+                                            {% if z.description_zone %}
+                                                <span class="text-muted text-truncate d-none d-sm-inline" style="max-width: 130px;">- {{ z.description_zone }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                            <i class="bi bi-check-circle me-1"></i>Đã vẽ
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Form vẽ phân khu mới -->
+                            <div class="border-top pt-3 mb-3">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-plus-square-dotted me-2"></i>
+                                    {% if zones %}Vẽ phân khu tiếp theo (Phân khu {{ zones|length|add:1 }}){% else %}Vẽ phân khu đầu tiên{% endif %}
+                                </h6>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold small text-muted mb-1" for="name_zone">
+                                        Tên phân khu tuần tra {% if not zones %}<span class="text-danger">*</span>{% endif %}
+                                    </label>
+                                    <input type="text" id="name_zone" class="form-control"
+                                        placeholder="Ví dụ: Phân khu {{ zones|length|add:1 }} - Đồi phía Đông" name="name_zone" autocomplete="off">
+                                </div>
+
+                                <input type="text" id="coords_polys" class="form-control" name="coords_polys" hidden>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold small text-muted mb-1" for="description">
+                                        Mô tả đặc điểm phân khu
+                                    </label>
+                                    <textarea class="form-control"
+                                        placeholder="Mô tả đặc điểm địa hình, loại cây rừng hoặc lưu ý khi bay UAV..."
+                                        id="description" name="description" rows="3"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Buttons action -->
+                        <div class="d-flex flex-column gap-2 mt-3">
+                            <button class="btn btn-outline-primary py-2 fw-semibold text-nowrap d-flex align-items-center justify-content-center" type="submit"
+                                value="true" name="ajoutez_un_polygone">
+                                <i class="bi bi-plus-circle me-2"></i> Lưu phân khu này &rarr; Vẽ tiếp phân khu khác
+                            </button>
+                            <button class="btn btn-outline-primary py-2 fw-semibold text-nowrap d-flex align-items-center justify-content-center"
+                                type="submit">
+                                <span>Hoàn tất các phân khu &rarr; Cấu hình Camera UAV</span>
+                                <i class="bi bi-arrow-right-circle ms-2"></i>
+                            </button>
+                            {% if zones %}
+                            <small class="text-muted text-center mt-1">
+                                <i class="bi bi-info-circle me-1"></i>Nếu đã vẽ đủ các phân khu, bạn có thể nhấn "Hoàn tất" để chuyển tiếp mà không cần vẽ thêm.
+                            </small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cột phải: Bản đồ Leaflet -->
+            <div class="col-lg-7">
+                <div class="card shadow-lg border-0 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">
+                                <i class="bi bi-map me-2"></i> Bản đồ số & Vùng bay tuần tra
+                            </h2>
+                            <span class="badge {% get_role_badge user %} rounded-pill">
+                                <i class="bi bi-pentagon me-1"></i>
+                                Công cụ vẽ Đa giác
+                            </span>
+                        </div>
+                        <div class="alert alert-info mb-3 py-2 px-3 small" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Cách vẽ phân khu:</strong> Chọn biểu tượng đa giác (<i class="bi bi-pentagon"></i>) ở góc trên bên trái bản đồ &rarr; click các điểm để khoanh vùng ranh giới &rarr; click lại điểm đầu tiên để khép kín hình. Các phân khu đã lưu trước đó được hiển thị với tên nhãn trên bản đồ.
+                        </div>
+                        <div id="map" class="w-100"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+    integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<script>
+    const map = L.map("map").setView([16.0544, 108.2022], 12);
+
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Esri World Imagery",
+    }).addTo(map);
+
+    var geocoder = L.Control.geocoder({
+        defaultMarkGeocode: false,
+        placeholder: "Tìm kiếm vị trí...",
+        errorMessage: "Không tìm thấy kết quả"
+    }).on('markgeocode', function (e) {
+        var bbox = e.geocode.bbox;
+        var poly = L.polygon([
+            bbox.getSouthEast(),
+            bbox.getNorthEast(),
+            bbox.getNorthWest(),
+            bbox.getSouthWest()
+        ]);
+        map.fitBounds(poly.getBounds(), {
+            maxZoom: 16
+        });
+    }).addTo(map);
+
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    var drawControl = new L.Control.Draw({
+        draw: {
+            polygon: {
+                shapeOptions: {
+                    color: "#198754",
+                    weight: 3,
+                    fillOpacity: 0.35
+                },
+            },
+            polyline: false,
+            rectangle: false,
+            circle: false,
+            marker: false,
+            circlemarker: false,
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: true,
+        },
+    });
+
+    map.addControl(drawControl);
+
+    function updatePolygonCoordinates(layer) {
+        var myjson = layer.toGeoJSON();
+        let coords = myjson.features[0].geometry.coordinates;
+        const multiPolygon = {
+            type: "MultiPolygon",
+            coordinates: [coords],
+        };
+        document.getElementById("coords_polys").value = JSON.stringify(multiPolygon);
+    }
+
+    map.on("draw:created", function (e) {
+        var type = e.layerType, layer = e.layer;
+        if (type === "polygon") {
+            if (drawnItems.getLayers().length === 0) {
+                drawnItems.addLayer(layer);
+                updatePolygonCoordinates(drawnItems);
+            } else {
+                alert("Mỗi lần chỉ vẽ 1 phân khu mới! Sau khi vẽ xong phân khu này, hãy nhấn 'Lưu phân khu này → Vẽ tiếp phân khu khác'.");
+            }
+        }
+    });
+
+    map.on("draw:edited", function (e) {
+        var layers = e.layers;
+        layers.eachLayer(function (layer) {
+            if (layer instanceof L.Polygon) {
+                updatePolygonCoordinates(drawnItems);
+            }
+        });
+    });
+
+    map.on("draw:deleted", function (e) {
+        var layers = e.layers;
+        layers.eachLayer(function (layer) {
+            if (layer instanceof L.Polygon) {
+                document.getElementById("coords_polys").value = "";
+            }
+        });
+    });
+
+    // Render all existing zones with distinct colors and tooltips
+    const existingBounds = L.latLngBounds();
+    let hasExistingZones = false;
+    const zoneColors = ['#0d6efd', '#fd7e14', '#6f42c1', '#20c997', '#d63384', '#0dcaf0', '#ffc107', '#198754'];
+
+    {% for zone_data in zones_data %}
+    {% if zone_data.coords_json != 'null' %}
+    (function(idx) {
+        try {
+            const geojson = {{ zone_data.coords_json|safe }};
+            const color = zoneColors[idx % zoneColors.length];
+            const polygonLayer = L.geoJSON(geojson, {
+                style: {
+                    color: color,
+                    weight: 3,
+                    fillColor: color,
+                    fillOpacity: 0.25
+                }
+            }).addTo(map);
+
+            const tooltipContent = `<div style="font-weight:700; font-size:12px; color:${color};"><i class="bi bi-geo-alt-fill"></i> {{ zone_data.zone.name_zone|escapejs }}</div>{% if zone_data.zone.description_zone %}<div style="font-size:11px; color:#555;">{{ zone_data.zone.description_zone|escapejs }}</div>{% endif %}`;
+            polygonLayer.bindTooltip(tooltipContent, { permanent: true, direction: 'center', className: 'zone-label-tooltip' });
+
+            const layerBounds = polygonLayer.getBounds();
+            if (layerBounds.isValid()) {
+                existingBounds.extend(layerBounds);
+                hasExistingZones = true;
+            }
+        } catch (e) {
+            console.error('Lỗi nạp vùng:', e);
+        }
+    })({{ forloop.counter0 }});
+    {% endif %}
+    {% endfor %}
+
+    if (hasExistingZones && existingBounds.isValid()) {
+        map.fitBounds(existingBounds, { padding: [50, 50], maxZoom: 16 });
+    }
+</script>
+{% endblock %}

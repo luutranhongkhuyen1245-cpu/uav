@@ -1,0 +1,753 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Lịch sử Sự cố & Cảnh báo Cháy UAV - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% if user.user_type == 'admin' %}{% url 'admin_dashboard' %}{% elif user.user_type == 'agent' %}{% url 'agent_dashboard' %}{% else %}{% url 'supervisor_dashboard' %}{% endif %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    {% if user.user_type == 'supervisor' %}
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'agents:agent_list' %}">
+            <i class="bi bi-people me-1"></i> Người vận hành UAV
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+    {% elif user.user_type == 'admin' %}
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'admin_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'manage_users' %}">
+            <i class="bi bi-people me-1"></i> Quản lý Người dùng
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'manage_projects' %}">
+            <i class="bi bi-folder me-1"></i> Quản lý Dự án
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+    {% elif user.user_type == 'agent' %}
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'agent_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+            <span class="badge bg-danger rounded-pill alert-count-badge d-none ms-1">0</span>
+        </a>
+    </li>
+    {% endif %}
+</ul>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    @keyframes highlightRow {
+        0% { background-color: rgba(220, 53, 69, 0.3); }
+        50% { background-color: rgba(220, 53, 69, 0.15); }
+        100% { background-color: transparent; }
+    }
+    .new-alert-row {
+        animation: highlightRow 3s ease-out;
+    }
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #198754;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        animation: pulseLive 1.5s infinite;
+    }
+    @keyframes pulseLive {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(25, 135, 84, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
+    }
+    .table-alerts-compact {
+        font-size: 0.85rem;
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .table-alerts-compact th, 
+    .table-alerts-compact td {
+        padding: 0.55rem 0.5rem !important;
+        vertical-align: middle;
+    }
+    .evidence-thumb {
+        width: 58px;
+        height: 38px;
+        object-fit: cover;
+        border-radius: 4px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        display: inline-block;
+    }
+    .evidence-thumb:hover {
+        transform: scale(1.12);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.25) !important;
+        z-index: 10;
+        position: relative;
+    }
+    .stat-pill {
+        min-width: 82px;
+        display: inline-block;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    }
+    .status-pill {
+        min-width: 98px;
+        display: inline-block;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .btn-action-soft-danger {
+        color: #dc3545;
+        background-color: #fff5f5;
+        border: 1px solid #f5c2c7;
+        font-size: 0.78rem;
+        padding: 0.22rem 0.5rem;
+        font-weight: 600;
+        transition: all 0.15s ease-in-out;
+    }
+    .btn-action-soft-danger:hover {
+        color: #fff;
+        background-color: #dc3545;
+        border-color: #dc3545;
+    }
+    .btn-action-soft-secondary {
+        color: #495057;
+        background-color: #f8f9fa;
+        border: 1px solid #ced4da;
+        font-size: 0.78rem;
+        padding: 0.22rem 0.5rem;
+        font-weight: 600;
+        transition: all 0.15s ease-in-out;
+    }
+    .btn-action-soft-secondary:hover {
+        color: #fff;
+        background-color: #6c757d;
+        border-color: #6c757d;
+    }
+    @media (min-width: 992px) {
+        .table-responsive {
+            overflow-x: hidden !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block main_class %}container-fluid px-3 px-xl-4 py-3{% endblock %}
+
+{% block content %}
+    <!-- Header Card -->
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-body p-4">
+            <h1 class="h2 mb-0 text-primary">
+                <i class="bi bi-shield-exclamation me-2"></i> Lịch sử Sự cố & Thẩm định Cảnh báo Cháy
+            </h1>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Tổng số sự cố</p>
+                            <h2 class="h3 mb-0 text-primary" id="stat-total">{{ total_count }}</h2>
+                        </div>
+                        <div class="text-primary">
+                            <i class="bi bi-clipboard-data fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Chờ xác nhận</p>
+                            <h2 class="h3 mb-0 text-warning" id="stat-new">{{ new_count }}</h2>
+                        </div>
+                        <div class="text-warning">
+                            <i class="bi bi-clock-history fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Xác nhận cháy thật</p>
+                            <h2 class="h3 mb-0 text-danger" id="stat-confirmed">{{ confirmed_count }}</h2>
+                        </div>
+                        <div class="text-danger">
+                            <i class="bi bi-fire fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Báo nhầm (False Alarm)</p>
+                            <h2 class="h3 mb-0 text-secondary" id="stat-false">{{ false_count }}</h2>
+                        </div>
+                        <div class="text-secondary">
+                            <i class="bi bi-shield-check fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-3">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <span class="text-muted small fw-semibold me-2">
+                    <i class="bi bi-funnel me-1"></i> Lọc theo trạng thái:
+                </span>
+                <a href="?status=all" class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}" id="pill-all">
+                    Tất cả (<span id="pill-total-num">{{ total_count }}</span>)
+                </a>
+                <a href="?status=new" class="btn btn-sm {% if status_filter == 'new' %}btn-warning text-dark fw-semibold{% else %}btn-outline-secondary{% endif %}" id="pill-new">
+                    <i class="bi bi-clock-history me-1"></i> Chờ duyệt (<span id="pill-new-num">{{ new_count }}</span>)
+                </a>
+                <a href="?status=confirmed" class="btn btn-sm {% if status_filter == 'confirmed' %}btn-danger fw-semibold{% else %}btn-outline-secondary{% endif %}" id="pill-confirmed">
+                    <i class="bi bi-fire me-1"></i> Cháy thật (<span id="pill-confirmed-num">{{ confirmed_count }}</span>)
+                </a>
+                <a href="?status=false_alarm" class="btn btn-sm {% if status_filter == 'false_alarm' %}btn-secondary fw-semibold{% else %}btn-outline-secondary{% endif %}" id="pill-false">
+                    <i class="bi bi-x-circle me-1"></i> Báo nhầm (<span id="pill-false-num">{{ false_count }}</span>)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts Table -->
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-list-ul me-2"></i> Danh sách Sự cố & Cảnh báo Cháy
+                </h4>
+                <span class="badge bg-light text-dark fs-6" id="badge-table-total">{{ alerts|length }} sự cố</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 align-middle table-alerts-compact">
+                    <thead class="table-light text-nowrap align-middle">
+                        <tr>
+                            <th style="width: 6%;" class="text-center text-nowrap"><i class="bi bi-hash"></i> Mã</th>
+                            <th style="width: 11%;" class="text-nowrap"><i class="bi bi-clock me-1"></i> Thời gian</th>
+                            <th style="width: 21%;" class="text-nowrap"><i class="bi bi-camera-video me-1"></i> Camera & Vùng</th>
+                            <th style="width: 10%;" class="text-center text-nowrap"><i class="bi bi-image me-1"></i> Minh chứng</th>
+                            <th style="width: 12%;" class="text-center text-nowrap"><i class="bi bi-percent me-1"></i> Độ tin cậy</th>
+                            <th style="width: 12%;" class="text-center text-nowrap"><i class="bi bi-shield-check me-1"></i> Trạng thái</th>
+                            <th style="width: 14%;" class="text-center text-nowrap"><i class="bi bi-person-badge me-1"></i> Người duyệt</th>
+                            <th style="width: 14%;" class="text-center text-nowrap">
+                                <i class="bi bi-gear me-1"></i> {% if user.user_type == 'supervisor' %}Thao tác{% else %}Xử lý{% endif %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-tbody">
+                        {% for a in alerts %}
+                        <tr id="alert-row-{{ a.id }}" data-alert-id="{{ a.id }}">
+                            <td class="fw-bold text-muted text-center text-nowrap">#{{ a.id }}</td>
+                            <td class="text-nowrap">
+                                <div class="fw-semibold text-dark">{{ a.detected_at|date:"H:i:s" }}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">{{ a.detected_at|date:"d/m/Y" }}</div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-primary text-truncate" title="{{ a.camera.name_cam }}">
+                                    <i class="bi bi-camera-video me-1"></i> {{ a.camera.name_cam }}
+                                </div>
+                                <div class="text-muted small text-truncate" style="font-size: 0.78rem;" title="{{ a.camera.name_zone.name_zone }} · {{ a.camera.name_zone.name_project.name }}">
+                                    {{ a.camera.name_zone.name_zone }} · {{ a.camera.name_zone.name_project.name }}
+                                </div>
+                            </td>
+                            <td class="text-center text-nowrap">
+                                {% if a.evidence_image %}
+                                <a href="/media/{{ a.evidence_image }}" target="_blank" title="Nhấn xem ảnh gốc kích thước lớn">
+                                    <img src="/media/{{ a.evidence_image }}" class="rounded shadow-sm border evidence-thumb" alt="Minh chứng">
+                                </a>
+                                {% else %}
+                                <span class="text-muted fst-italic" style="font-size: 0.75rem;">Không ảnh</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-nowrap">
+                                <span class="badge {% if a.confidence_percent >= 70 %}bg-danger{% elif a.confidence_percent >= 50 %}bg-warning text-dark{% else %}bg-secondary{% endif %} stat-pill px-2 py-1">
+                                    <i class="bi bi-fire me-1"></i>{{ a.confidence_percent }}%
+                                </span>
+                            </td>
+                            <td class="status-cell text-center text-nowrap">
+                                {% if a.status == 'new' %}
+                                    <span class="badge bg-warning text-dark status-pill px-2 py-1">
+                                        <i class="bi bi-clock-history me-1"></i> Chờ duyệt
+                                    </span>
+                                {% elif a.status == 'confirmed' %}
+                                    <span class="badge bg-danger status-pill px-2 py-1">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Cháy thật
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary status-pill px-2 py-1">
+                                        <i class="bi bi-x-circle-fill me-1"></i> Báo nhầm
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="reviewer-cell text-center text-nowrap">
+                                {% if a.reviewed_by %}
+                                    <div class="fw-semibold text-truncate small" title="{{ a.reviewed_by.email }}">
+                                        <i class="bi bi-person-check text-success me-1"></i>{{ a.reviewed_by.email }}
+                                    </div>
+                                    {% if a.note %}<div class="text-muted fst-italic text-truncate" style="font-size: 0.72rem;" title="{{ a.note }}">"{{ a.note }}"</div>{% endif %}
+                                {% else %}
+                                    <span class="badge bg-light text-muted border px-2 py-1" style="font-size: 0.75rem;">
+                                        <i class="bi bi-dash"></i> Chưa duyệt
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center action-cell text-nowrap">
+                                {% if user.user_type == 'supervisor' %}
+                                    {% if a.status == 'new' %}
+                                    <div class="d-inline-flex gap-1 justify-content-center">
+                                        <button type="button" onclick="submitReview({{ a.id }}, 'confirmed', this)" class="btn btn-action-soft-danger rounded-2 shadow-sm" title="Xác nhận đám cháy thật">
+                                            <i class="bi bi-check-lg me-1"></i>Cháy thật
+                                        </button>
+                                        <button type="button" onclick="submitReview({{ a.id }}, 'false_alarm', this)" class="btn btn-action-soft-secondary rounded-2 shadow-sm" title="Đánh dấu báo nhầm">
+                                            <i class="bi bi-x-lg me-1"></i>Báo nhầm
+                                        </button>
+                                    </div>
+                                    {% else %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" style="font-size: 0.78rem;">
+                                        <i class="bi bi-check-all me-1"></i>Đã thẩm định
+                                    </span>
+                                    {% endif %}
+                                {% else %}
+                                    {% if a.status == 'new' %}
+                                        <span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1" style="font-size: 0.78rem;">
+                                            <i class="bi bi-hourglass-split me-1"></i>Chờ xử lý
+                                        </span>
+                                    {% elif a.status == 'confirmed' %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1" style="font-size: 0.78rem;">
+                                            <i class="bi bi-fire me-1"></i>Đã duyệt
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary border px-2 py-1" style="font-size: 0.78rem;">
+                                            <i class="bi bi-check2 me-1"></i>Đã thẩm định
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr id="empty-row">
+                            <td colspan="8" class="text-center py-5">
+                                <i class="bi bi-shield-check display-1 text-success mb-3"></i>
+                                <h4 class="text-muted">Không có sự cố nào cần xử lý</h4>
+                                <p class="text-muted mb-0">Hệ thống chưa ghi nhận đám cháy nào vượt ngưỡng trong bộ lọc này.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- AI Settings Modal -->
+    <div class="modal fade" id="aiSettingsModal" tabindex="-1" aria-labelledby="aiSettingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="aiSettingsModalLabel">
+                        <i class="bi bi-sliders me-2"></i> Cấu hình Động Tham số AI Phát hiện
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info border-0 d-flex align-items-center mb-4">
+                        <i class="bi bi-info-circle-fill fs-4 me-3 text-primary"></i>
+                        <div class="small">
+                            Các thay đổi thông số sẽ được lưu vào cơ sở dữ liệu và có hiệu lực tức thì trên tất cả luồng camera UAV đang hoạt động mà <strong>không cần khởi động lại máy chủ</strong>.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label fw-semibold">Ngưỡng tin cậy Lửa (Fire Confidence):</label>
+                            <span id="page-fire-conf-val" class="fw-bold text-danger">{{ ai_settings.fire_conf }}</span>
+                        </div>
+                        <input type="range" class="form-range" id="page-fire-conf" min="0.1" max="0.95" step="0.05" value="{{ ai_settings.fire_conf }}" oninput="document.getElementById('page-fire-conf-val').innerText = this.value">
+                        <div class="form-text text-muted">Ngưỡng tối thiểu để mô hình AI nhận diện đốm lửa (mặc định 0.45).</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label fw-semibold">Ngưỡng tin cậy Khói (Smoke Confidence):</label>
+                            <span id="page-smoke-conf-val" class="fw-bold text-info">{{ ai_settings.smoke_conf }}</span>
+                        </div>
+                        <input type="range" class="form-range" id="page-smoke-conf" min="0.1" max="0.95" step="0.05" value="{{ ai_settings.smoke_conf }}" oninput="document.getElementById('page-smoke-conf-val').innerText = this.value">
+                        <div class="form-text text-muted">Ngưỡng tối thiểu để mô hình AI nhận diện cột khói (mặc định 0.35).</div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Khung hình duy trì:</label>
+                            <input type="number" class="form-control" id="page-persistence" min="1" max="30" value="{{ ai_settings.persistence_frames }}">
+                            <div class="form-text text-muted">Số frames liên tiếp cần phát hiện (mặc định 3).</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Khoảng gom cụm (giây):</label>
+                            <input type="number" class="form-control" id="page-gap" min="3" max="120" value="{{ ai_settings.gap_seconds }}">
+                            <div class="form-text text-muted">Khoảng lặng video để tách sự cố mới (mặc định 15s).</div>
+                        </div>
+                    </div>
+
+                    <div id="page-ai-alert" class="alert d-none py-2 px-3 small"></div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-primary" onclick="savePageAISettings()">
+                        <i class="bi bi-check-lg me-1"></i> Lưu cấu hình
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Dữ liệu ban đầu
+    const statusFilter = "{{ status_filter }}";
+    let maxKnownId = {% if alerts.first %}{{ alerts.first.id }}{% else %}0{% endif %};
+    const currentUserEmail = "{{ user.email }}";
+    const csrfToken = '{{ csrf_token }}';
+    const isSupervisor = {% if user.user_type == 'supervisor' %}true{% else %}false{% endif %};
+
+    // 1. Âm thanh cảnh báo sử dụng Web Audio API
+    let audioCtx = null;
+    function playAlertChime() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(850, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1300, audioCtx.currentTime + 0.25);
+            gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+        } catch(e) {
+            console.debug("Audio play error:", e);
+        }
+    }
+
+    // 2. Thẩm định sự cố trực tiếp qua AJAX (Không cần tải lại trang)
+    function submitReview(alertId, action, btnElement) {
+        btnElement.disabled = true;
+        const originalHtml = btnElement.innerHTML;
+        btnElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        const formData = new FormData();
+        formData.append('action', action);
+        formData.append('csrfmiddlewaretoken', csrfToken);
+
+        fetch(`/projects/alerts/${alertId}/review/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const row = document.getElementById(`alert-row-${alertId}`);
+                if (row) {
+                    const statusCell = row.querySelector('.status-cell');
+                    const reviewerCell = row.querySelector('.reviewer-cell');
+                    const actionCell = row.querySelector('.action-cell');
+
+                    if (action === 'confirmed') {
+                        statusCell.innerHTML = `
+                            <span class="badge bg-danger status-pill px-2 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Cháy thật
+                            </span>
+                        `;
+                    } else {
+                        statusCell.innerHTML = `
+                            <span class="badge bg-secondary status-pill px-2 py-1">
+                                <i class="bi bi-x-circle-fill me-1"></i> Báo nhầm
+                            </span>
+                        `;
+                    }
+
+                    reviewerCell.innerHTML = `
+                        <div class="fw-semibold text-truncate small" title="${data.reviewer}">
+                            <i class="bi bi-person-check text-success me-1"></i>${data.reviewer}
+                        </div>
+                    `;
+                    actionCell.innerHTML = `
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" style="font-size: 0.78rem;">
+                            <i class="bi bi-check-all me-1"></i>Đã thẩm định
+                        </span>
+                    `;
+                }
+
+                // Cập nhật số liệu thống kê ngay lập tức
+                updateStatNumbers(data);
+
+                // Hiển thị thông báo nhỏ
+                showLiveToast(
+                    action === 'confirmed' ? 'Đã xác nhận Cháy thật!' : 'Đã xác nhận Báo nhầm!',
+                    `Cảnh báo #${alertId} đã được cập nhật thành công.`,
+                    action === 'confirmed' ? 'danger' : 'secondary'
+                );
+            }
+        })
+        .catch(err => {
+            console.error("Lỗi khi gửi thẩm định:", err);
+            btnElement.disabled = false;
+            btnElement.innerHTML = originalHtml;
+        });
+    }
+
+    // 3. Cập nhật các con số thống kê trên giao diện
+    function updateStatNumbers(data) {
+        if (data.total_count !== undefined) {
+            document.getElementById('stat-total').textContent = data.total_count;
+            document.getElementById('pill-total-num').textContent = data.total_count;
+        }
+        if (data.new_count !== undefined) {
+            document.getElementById('stat-new').textContent = data.new_count;
+            document.getElementById('pill-new-num').textContent = data.new_count;
+        }
+        if (data.confirmed_count !== undefined) {
+            document.getElementById('stat-confirmed').textContent = data.confirmed_count;
+            document.getElementById('pill-confirmed-num').textContent = data.confirmed_count;
+        }
+        if (data.false_count !== undefined) {
+            document.getElementById('stat-false').textContent = data.false_count;
+            document.getElementById('pill-false-num').textContent = data.false_count;
+        }
+    }
+
+    // 4. Tạo thẻ hiển thị thông báo góc màn hình
+    function showLiveToast(title, msg, type = 'danger') {
+        const toastId = 'toast-' + Date.now();
+        const html = `
+            <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0 shadow-lg show mb-2" role="alert">
+                <div class="d-flex">
+                    <div class="toast-body d-flex align-items-start gap-2">
+                        <i class="bi bi-fire fs-4 text-warning"></i>
+                        <div>
+                            <strong>${title}</strong>
+                            <div class="small">${msg}</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+        `;
+        let container = document.getElementById('global-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'global-toast-container';
+            container.className = 'toast-container position-fixed top-0 end-0 p-3';
+            container.style.zIndex = '9999';
+            document.body.appendChild(container);
+        }
+        container.insertAdjacentHTML('beforeend', html);
+        setTimeout(() => {
+            const el = document.getElementById(toastId);
+            if (el) el.remove();
+        }, 8000);
+    }
+
+    // 5. Polling tự động kiểm tra CSDL mỗi 3 giây
+    function pollAlerts() {
+        fetch(`/projects/api/alerts/latest/?status=${statusFilter}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) return;
+
+                // Cập nhật thống kê
+                updateStatNumbers(data);
+
+                // Nếu có bản ghi mới hơn
+                if (data.newest_id > maxKnownId) {
+                    playAlertChime();
+                    const newAlerts = data.alerts.filter(a => a.id > maxKnownId);
+
+                    const tbody = document.getElementById('alerts-tbody');
+                    const emptyRow = document.getElementById('empty-row');
+                    if (emptyRow) emptyRow.remove();
+
+                    newAlerts.forEach(a => {
+                        const rowHtml = `
+                            <tr id="alert-row-${a.id}" data-alert-id="${a.id}" class="new-alert-row">
+                                <td class="fw-bold text-muted text-center text-nowrap">#${a.id}</td>
+                                <td class="text-nowrap">
+                                    <div class="fw-semibold text-danger">${a.detected_time} <span class="badge bg-danger-subtle text-danger" style="font-size: 0.7rem;">Mới</span></div>
+                                    <div class="text-muted" style="font-size: 0.75rem;">${a.detected_date}</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-primary text-truncate" title="${a.cam_name}">
+                                        <i class="bi bi-camera-video me-1"></i> ${a.cam_name}
+                                    </div>
+                                    <div class="text-muted small text-truncate" style="font-size: 0.78rem;" title="${a.zone_name} · ${a.project_name}">
+                                        ${a.zone_name} · ${a.project_name}
+                                    </div>
+                                </td>
+                                <td class="text-center text-nowrap">
+                                    ${a.evidence_url ? `
+                                        <a href="${a.evidence_url}" target="_blank" title="Nhấn xem ảnh lớn">
+                                            <img src="${a.evidence_url}" class="rounded shadow-sm border border-danger evidence-thumb" alt="Minh chứng">
+                                        </a>
+                                    ` : '<span class="text-muted fst-italic" style="font-size: 0.75rem;">Không ảnh</span>'}
+                                </td>
+                                <td class="text-center text-nowrap">
+                                    <span class="badge ${a.confidence >= 70 ? 'bg-danger' : (a.confidence >= 50 ? 'bg-warning text-dark' : 'bg-secondary')} stat-pill px-2 py-1">
+                                        <i class="bi bi-fire me-1"></i>${a.confidence}%
+                                    </span>
+                                </td>
+                                <td class="status-cell text-center text-nowrap">
+                                    <span class="badge bg-warning text-dark status-pill px-2 py-1">
+                                        <i class="bi bi-clock-history me-1"></i> Chờ duyệt
+                                    </span>
+                                </td>
+                                <td class="reviewer-cell text-center text-nowrap">
+                                    <span class="badge bg-light text-muted border px-2 py-1" style="font-size: 0.75rem;">
+                                        <i class="bi bi-dash"></i> Chưa duyệt
+                                    </span>
+                                </td>
+                                <td class="text-center action-cell text-nowrap">
+                                    ${isSupervisor ? `
+                                        <div class="d-inline-flex gap-1 justify-content-center">
+                                            <button type="button" onclick="submitReview(${a.id}, 'confirmed', this)" class="btn btn-action-soft-danger rounded-2 shadow-sm" title="Xác nhận cháy thật">
+                                                <i class="bi bi-check-lg me-1"></i>Cháy thật
+                                            </button>
+                                            <button type="button" onclick="submitReview(${a.id}, 'false_alarm', this)" class="btn btn-action-soft-secondary rounded-2 shadow-sm" title="Báo nhầm">
+                                                <i class="bi bi-x-lg me-1"></i>Báo nhầm
+                                            </button>
+                                        </div>
+                                    ` : `
+                                        <span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1" style="font-size: 0.78rem;">
+                                            <i class="bi bi-hourglass-split me-1"></i>Chờ xử lý
+                                        </span>
+                                    `}
+                                </td>
+                            </tr>
+                        `;
+                        tbody.insertAdjacentHTML('afterbegin', rowHtml);
+                        const zoneText = (a.zone_name && a.zone_name !== 'N/A') ? a.zone_name : 'chưa xác định';
+                        showLiveToast('🔥 PHÁT HIỆN ĐÁM CHÁY MỚI!', `Cháy tại camera ${a.cam_name} ở khu vực ${zoneText} (${a.confidence}%)`, 'danger');
+                    });
+
+                    maxKnownId = data.newest_id;
+                    const badgeTotal = document.getElementById('badge-table-total');
+                    if (badgeTotal) {
+                        badgeTotal.textContent = `${tbody.querySelectorAll('tr').length} sự cố`;
+                    }
+                }
+            })
+            .catch(err => console.debug("Poll error:", err));
+    }
+
+    // Khởi chạy polling mỗi 3 giây
+    setInterval(pollAlerts, 3000);
+
+    // 6. Cập nhật cấu hình AI động
+    function savePageAISettings() {
+        const fireConf = parseFloat(document.getElementById('page-fire-conf').value);
+        const smokeConf = parseFloat(document.getElementById('page-smoke-conf').value);
+        const persistence = parseInt(document.getElementById('page-persistence').value);
+        const gap = parseFloat(document.getElementById('page-gap').value);
+        const alertBox = document.getElementById('page-ai-alert');
+
+        fetch("{% url 'projects:api_ai_settings' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken
+            },
+            body: JSON.stringify({
+                fire_conf: fireConf,
+                smoke_conf: smokeConf,
+                persistence_frames: persistence,
+                gap_seconds: gap
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alertBox.classList.remove('d-none', 'alert-danger', 'alert-success');
+            if (data.success) {
+                alertBox.classList.add('alert-success');
+                alertBox.innerHTML = '<i class="bi bi-check-circle me-1"></i> ' + data.message;
+                setTimeout(() => {
+                    const modalEl = document.getElementById('aiSettingsModal');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                    alertBox.classList.add('d-none');
+                }, 2000);
+            } else {
+                alertBox.classList.add('alert-danger');
+                alertBox.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> ' + (data.error || 'Lỗi lưu cấu hình.');
+            }
+        })
+        .catch(err => {
+            alertBox.classList.remove('d-none', 'alert-success');
+            alertBox.classList.add('alert-danger');
+            alertBox.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> Không thể kết nối tới máy chủ.';
+        });
+    }
+</script>
+{% endblock %}

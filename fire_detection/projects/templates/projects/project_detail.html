@@ -1,0 +1,524 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Chi tiết Dự án - {{ project.name }} - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="">
+<style>
+    #map {
+        height: 600px;
+        border-radius: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="card border-0 bg-light mb-4">
+        <div class="card-body py-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'supervisor_dashboard' %}" class="text-decoration-none">
+                            <i class="bi bi-house-door me-1"></i> Bảng điều khiển
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'projects:project_list' %}" class="text-decoration-none">Dự án tuần tra</a>
+                    </li>
+                    <li class="breadcrumb-item active">{{ project.name }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Project Header Card -->
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-header {% get_role_bg user %} text-white py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <h1 class="h2 mb-0 fw-bold">{{ project.name }}</h1>
+                        <span class="badge {{ project.progress_status.badge_class }} px-2.5 py-1.5 d-inline-flex align-items-center shadow-sm" style="font-size: 0.85rem; font-weight: 500;">
+                            <i class="bi {{ project.progress_status.icon }} me-1"></i>
+                            {{ project.progress_status.label }}
+                        </span>
+                    </div>
+                    <p class="mb-0 opacity-90 small">
+                        {% if project.description %}
+                            {{ project.description }}
+                        {% else %}
+                            <span class="fst-italic opacity-75">Dự án tuần tra & giám sát phòng cháy rừng bằng Camera UAV</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% if user.user_type == 'supervisor' or user.is_superuser %}
+                        {% if project.progress_status.code == 'ready' %}
+                            <form method="post" action="{% url 'projects:toggle_patrol' project.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-success btn-sm fw-semibold shadow-sm px-3" title="Bắt đầu ca bay tuần tra">
+                                    <i class="bi bi-play-circle me-1"></i> Bắt đầu tuần tra
+                                </button>
+                            </form>
+                        {% elif project.progress_status.code == 'patrolling' %}
+                            <form method="post" action="{% url 'projects:toggle_patrol' project.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-warning btn-sm text-dark fw-semibold px-3" title="Tạm dừng ca bay tuần tra">
+                                    <i class="bi bi-pause-circle me-1"></i> Tạm dừng
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
+
+                    <button type="button" class="btn btn-outline-light btn-sm px-3" data-bs-toggle="modal" data-bs-target="#editProjectModal" title="Chỉnh sửa thông tin chi tiết dự án">
+                        <i class="bi bi-pencil-square me-1"></i> Chỉnh sửa thông tin
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <!-- Row 1: Key Operational Metrics (3 columns) -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light text-center h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="h2 mb-0 {% get_role_text user %} fw-bold">{{ zones|length }}</div>
+                            <div class="text-muted small text-uppercase fw-semibold mt-1">
+                                <i class="bi bi-geo-alt me-1 {% get_role_text user %}"></i> Vùng tuần tra
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light text-center h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="h2 mb-0 {% get_role_text user %} fw-bold">{{ total_cameras }}</div>
+                            <div class="text-muted small text-uppercase fw-semibold mt-1">
+                                <i class="bi bi-camera-video me-1 {% get_role_text user %}"></i> Camera UAV
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light text-center h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="h2 mb-0 {% get_role_text user %} fw-bold">{{ project.assigned_agents.count }}</div>
+                            <div class="text-muted small text-uppercase fw-semibold mt-1">
+                                <i class="bi bi-people me-1 {% get_role_text user %}"></i> Phi công vận hành
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Project Management Metadata (3 columns matching Row 1) -->
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="small text-uppercase text-muted fw-semibold mb-1">
+                                <i class="bi bi-person-badge me-1 {% get_role_text user %}"></i> Điều phối viên phụ trách
+                            </div>
+                            <div class="fw-semibold text-truncate" title="{{ project.supervisor.email|default:'Chưa phân công' }}">
+                                {{ project.supervisor.email|default:"Chưa phân công" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="small text-uppercase text-muted fw-semibold mb-1">
+                                <i class="bi bi-calendar-plus me-1 {% get_role_text user %}"></i> Thời điểm khởi tạo
+                            </div>
+                            <div class="fw-semibold">
+                                {{ project.created_at|date:"d/m/Y H:i" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100 shadow-sm">
+                        <div class="card-body py-3">
+                            <div class="small text-uppercase text-muted fw-semibold mb-1">
+                                <i class="bi bi-calendar-check me-1 {% get_role_text user %}"></i> Ngày bắt đầu tuần tra
+                            </div>
+                            <div class="fw-semibold">
+                                {{ project.start_date|date:"d/m/Y" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zones and Cameras -->
+    {% if zones_data %}
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-header {% get_role_bg user %} text-white">
+            <h2 class="h4 mb-0">
+                <i class="bi bi-diagram-3 me-2"></i> Các vùng giám sát & Camera UAV
+            </h2>
+        </div>
+        <div class="card-body p-4">
+            {% for zone_data in zones_data %}
+            <div class="card border mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="mb-1">
+                                <i class="bi bi-pentagon me-2 text-primary"></i>{{ zone_data.zone.name_zone }}
+                            </h5>
+                            {% if zone_data.zone.description_zone %}
+                                <p class="text-muted mb-1 small">{{ zone_data.zone.description_zone }}</p>
+                            {% endif %}
+                            
+                            <!-- Chuyên viên phụ trách riêng cho Phân khu này -->
+                            <div class="mt-2 d-flex align-items-center gap-1 flex-wrap">
+                                <span class="text-muted small fw-semibold me-1">
+                                    <i class="bi bi-person-badge text-primary me-1"></i>Phụ trách phân khu:
+                                </span>
+                                {% for ag in zone_data.zone.assigned_agents.all %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary px-2 py-1">
+                                        <i class="bi bi-person-fill me-1"></i>{{ ag.user.get_full_name|default:ag.user.email }}
+                                    </span>
+                                {% empty %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1">
+                                        <i class="bi bi-exclamation-circle me-1"></i>Chưa gán người vận hành
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-info fs-6">
+                                {{ zone_data.cameras_data|length }} camera UAV
+                            </span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#assignZoneAgentsModal-{{ zone_data.zone.Zone_ID }}" title="Phân công Người vận hành UAV phụ trách phân khu này">
+                                <i class="bi bi-person-gear me-1"></i>Phân công Người vận hành
+                            </button>
+                            <a href="{% url 'projects:add_cam' zone_data.zone.Zone_ID %}" class="btn btn-sm btn-outline-primary" title="Thêm camera UAV cho vùng này">
+                                <i class="bi bi-camera-video me-1"></i>Thêm Camera
+                            </a>
+                            {% if zone_data.cameras_data %}
+                            <a href="{% url 'agents:stream_cam' zone_data.zone.Zone_ID %}" class="btn btn-sm btn-primary" title="Xem luồng trực tiếp các camera của vùng này">
+                                <i class="bi bi-play-circle me-1"></i>Xem trực tiếp
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if zone_data.cameras_data %}
+                    <div class="mt-3">
+                        <h6 class="mb-2">
+                            <i class="bi bi-camera-video me-2"></i> Danh sách Camera UAV
+                        </h6>
+                        {% for cam_data in zone_data.cameras_data %}
+                        <div class="card border-start border-4 {% if cam_data.cam.is_primary %}border-success shadow-sm bg-success bg-opacity-10{% else %}border-secondary{% endif %} mb-2">
+                            <div class="card-body py-2">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <strong>{{ cam_data.cam.name_cam }}</strong>
+                                            {% if cam_data.cam.is_primary %}
+                                                <span class="badge bg-success"><i class="bi bi-airplane-fill me-1"></i> Trực chiến (Đang bay)</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i> Dự phòng (Standby)</span>
+                                            {% endif %}
+                                        </div>
+                                        {% if cam_data.cam.description_cam %}
+                                            <small class="text-muted d-block">{{ cam_data.cam.description_cam }}</small>
+                                        {% endif %}
+                                        {% if cam_data.cam.rtsp_url %}
+                                            <small class="text-success d-block">
+                                                <i class="bi bi-link-45deg me-1"></i>{{ cam_data.cam.rtsp_url|truncatechars:50 }}
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {% if not cam_data.cam.is_primary %}
+                                            {% if user.user_type == 'agent' %}
+                                            <form method="post" action="{% url 'projects:switch_camera' zone_data.zone.Zone_ID cam_data.cam.cam_ID %}" class="d-inline m-0">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-success font-weight-bold" title="Đặt làm UAV trực chiến bay chính cho phân khu này">
+                                                    <i class="bi bi-arrow-repeat me-1"></i> Cất cánh thay thế (Chọn làm Trực chiến)
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        {% else %}
+                                        <a href="{% url 'agents:stream_cam' zone_data.zone.Zone_ID %}" class="btn btn-sm btn-success fw-semibold shadow-sm" title="Xem luồng trực tiếp UAV đang bay">
+                                            <i class="bi bi-broadcast me-1"></i> Đang phát trực tiếp
+                                        </a>
+                                        {% endif %}
+                                        {% if cam_data.cam.adresse_cam %}
+                                            <small class="text-muted d-none d-md-inline ms-2">
+                                                <i class="bi bi-router me-1"></i>{{ cam_data.cam.adresse_cam }}{% if cam_data.cam.num_port %}:{{ cam_data.cam.num_port }}{% endif %}
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">
+                        <i class="bi bi-info-circle me-2"></i> Chưa có camera UAV nào được gắn vào vùng này
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-inbox display-1 {% get_role_text user %} mb-3"></i>
+            <h4 class="text-muted">Chưa cấu hình vùng tuần tra</h4>
+            <p class="text-muted">Dự án này hiện chưa có vùng bay nào được thiết lập.</p>
+            <a href="{% url 'projects:add_zone' project.id %}" class="btn {% get_role_btn user %} btn-lg">
+                <i class="bi bi-plus-circle me-2"></i> Thêm vùng tuần tra mới
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Map Card -->
+    {% if zones_data %}
+    <div class="card shadow-lg border-0 mb-4">
+        <div class="card-header {% get_role_bg user %} text-white">
+            <h2 class="h4 mb-0">
+                <i class="bi bi-geo-alt me-2"></i> Bản đồ Vùng bay tuần tra UAV
+            </h2>
+        </div>
+        <div class="card-body p-4">
+            <div id="map"></div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="d-flex gap-3 justify-content-end mb-4 flex-wrap">
+        <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i> Quay lại
+        </a>
+        <a href="{% url 'projects:add_zone' project.id %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i> {% if zones %}Thêm phân khu tuần tra{% else %}Thiết lập phân khu đầu tiên{% endif %}
+        </a>
+    </div>
+
+    <!-- Modal Chỉnh sửa thông tin chi tiết Dự án -->
+    <div class="modal fade" id="editProjectModal" tabindex="-1" aria-labelledby="editProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <form method="post" action="{% url 'projects:update_project' project.id %}">
+                    {% csrf_token %}
+                    <div class="modal-header {% get_role_bg user %} text-white">
+                        <h5 class="modal-title" id="editProjectModalLabel">
+                            <i class="bi bi-pencil-square me-2"></i> Cập nhật thông tin chi tiết dự án
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-folder me-1 text-primary"></i> Tên dự án tuần tra <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="name" class="form-control form-control-lg" value="{{ project.name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-calendar-event me-1 text-primary"></i> Ngày bắt đầu tuần tra
+                            </label>
+                            <input type="date" name="start_date" class="form-control" value="{{ project.start_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-card-text me-1 text-primary"></i> Mục tiêu giám sát & Mô tả khu rừng
+                            </label>
+                            <textarea name="description" class="form-control" rows="4" placeholder="Mục tiêu chuyến bay, thảm thực vật, địa hình...">{{ project.description }}</textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-save me-2"></i> Lưu cập nhật
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals Phân công Người vận hành UAV cho từng Phân khu cụ thể -->
+    {% if zones_data %}
+        {% for zone_data in zones_data %}
+        <div class="modal fade" id="assignZoneAgentsModal-{{ zone_data.zone.Zone_ID }}" tabindex="-1" aria-labelledby="assignZoneModalLabel-{{ zone_data.zone.Zone_ID }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow-lg">
+                    <form method="post" action="{% url 'projects:assign_zone_agents' zone_data.zone.Zone_ID %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title" id="assignZoneModalLabel-{{ zone_data.zone.Zone_ID }}">
+                                <i class="bi bi-person-gear me-2"></i> Phân công Người vận hành UAV cho Phân khu "{{ zone_data.zone.name_zone }}"
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            <div class="alert alert-light border mb-3">
+                                <i class="bi bi-info-circle text-primary me-2"></i>
+                                Người vận hành UAV được chọn sẽ chịu trách nhiệm giám sát và nhận cảnh báo trực tiếp từ các camera UAV thuộc phân khu <strong>{{ zone_data.zone.name_zone }}</strong> (Dự án: {{ project.name }}).
+                            </div>
+                            
+                            {% if available_agents %}
+                            <div class="list-group">
+                                {% for agent_profile in available_agents %}
+                                <label class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3">
+                                    <input class="form-check-input flex-shrink-0" type="checkbox" name="agent_ids" value="{{ agent_profile.id }}" 
+                                           {% if agent_profile in zone_data.zone.assigned_agents.all %}checked{% endif %} 
+                                           style="width: 1.3rem; height: 1.3rem;">
+                                    <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 42px; height: 42px; font-weight: 700;">
+                                        {{ agent_profile.user.email|first|upper }}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0 fw-bold">{{ agent_profile.user.get_full_name|default:agent_profile.user.email }}</h6>
+                                            <span class="badge bg-success-subtle text-success border border-success">Sẵn sàng</span>
+                                        </div>
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-envelope me-1"></i> {{ agent_profile.user.email }}
+                                            {% if agent_profile.phone_number %}
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-telephone me-1"></i> {{ agent_profile.phone_number }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle me-2"></i> Chưa có tài khoản Người vận hành UAV nào đang hoạt động trong hệ thống.
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="bi bi-x-circle me-1"></i> Hủy bỏ
+                            </button>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-circle me-1"></i> Lưu phân công phân khu
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+
+{% if zones_data %}
+<script>
+    const map = L.map('map').setView([36.89186227222111, 10.187473488849253], 13);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Leaflet Map ©'
+    }).addTo(map);
+
+    const cameraIcon = L.icon({
+        iconUrl: 'data:image/jpeg;base64,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',
+        iconSize: [32, 32],
+    });
+
+    {% for zone_data in zones_data %}
+        {% if zone_data.coords_json != 'null' %}
+        (function() {
+            try {
+                const geojson = {{ zone_data.coords_json|safe }};
+                const polygonLayer = L.geoJSON(geojson, {
+                    style: {
+                        color: '#198754',
+                        weight: 3,
+                        fillColor: '#198754',
+                        fillOpacity: 0.2
+                    }
+                }).addTo(map);
+                
+                const tooltipContent = `<strong>{{ zone_data.zone.name_zone|escapejs }}</strong><br>{{ zone_data.zone.description_zone|default:""|escapejs }}`;
+                polygonLayer.bindTooltip(tooltipContent, { permanent: false, direction: 'center' });
+                
+                if (polygonLayer.getBounds().isValid()) {
+                    map.fitBounds(polygonLayer.getBounds(), { padding: [50, 50] });
+                }
+            } catch(e) {
+                console.error('Lỗi nạp vùng:', e);
+            }
+        })();
+        {% endif %}
+
+        {% for cam_data in zone_data.cameras_data %}
+            {% if cam_data.coords_json != 'null' %}
+            (function() {
+                try {
+                    const geojson = {{ cam_data.coords_json|safe }};
+                    const marker = L.geoJSON(geojson, {
+                        pointToLayer: function (feature, latlng) {
+                            return L.marker(latlng, { icon: cameraIcon });
+                        }
+                    }).addTo(map);
+                    
+                    const popupContent = `
+                        <strong>{{ cam_data.cam.name_cam|escapejs }}</strong><br>
+                        {% if cam_data.cam.description_cam %}{{ cam_data.cam.description_cam|escapejs }}<br>{% endif %}
+                        {% if cam_data.cam.adresse_cam %}
+                            <i class="bi bi-router"></i> {{ cam_data.cam.adresse_cam }}
+                            {% if cam_data.cam.num_port %}:{{ cam_data.cam.num_port }}{% endif %}
+                        {% endif %}
+                    `;
+                    marker.bindPopup(popupContent);
+                } catch(e) {
+                    console.error('Lỗi nạp camera:', e);
+                }
+            })();
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+</script>
+{% endif %}
+{% endblock %}

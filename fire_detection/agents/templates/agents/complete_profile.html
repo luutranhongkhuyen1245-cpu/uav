@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Hoàn tất hồ sơ Người vận hành UAV - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-header bg-primary text-white text-center py-4 rounded-top-4">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-lock-fill display-4"></i>
+                    </div>
+                    <h2 class="h4 mb-1 fw-bold">Hoàn tất hồ sơ Người vận hành UAV</h2>
+                    <p class="mb-0 opacity-75 small">Chào mừng bạn! Vui lòng hoàn thành thông tin để bắt đầu giám sát</p>
+                </div>
+                
+                <div class="card-body p-4 p-md-5">
+                    <form method="post" action="{% url 'agents:complete_profile' %}">
+                        {% csrf_token %}
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="first_name" class="form-label fw-semibold">
+                                    <i class="bi bi-person me-1"></i> Tên
+                                </label>
+                                <input type="text" class="form-control" id="first_name" name="first_name" value="{{ user.first_name }}" placeholder="Ví dụ: Văn A" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="last_name" class="form-label fw-semibold">
+                                    <i class="bi bi-person me-1"></i> Họ đệm
+                                </label>
+                                <input type="text" class="form-control" id="last_name" name="last_name" value="{{ user.last_name }}" placeholder="Ví dụ: Nguyễn" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="phone_number" class="form-label fw-semibold">
+                                <i class="bi bi-telephone me-1"></i> Số điện thoại liên hệ
+                            </label>
+                            <input type="tel" class="form-control" id="phone_number" name="phone_number" placeholder="Ví dụ: 0912345678" required>
+                            <div class="form-text">Dùng để nhận cuộc gọi khẩn cấp khi phát hiện đám cháy.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="address" class="form-label fw-semibold">
+                                <i class="bi bi-geo-alt me-1"></i> Địa chỉ / Khu vực làm việc
+                            </label>
+                            <textarea class="form-control" id="address" name="address" rows="2" placeholder="Ví dụ: Trạm bảo vệ số 1, Khu rừng phía Bắc..." required></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg fw-semibold shadow-sm">
+                                <i class="bi bi-check-circle-fill me-2"></i> Xác nhận & Vào Bảng điều khiển
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

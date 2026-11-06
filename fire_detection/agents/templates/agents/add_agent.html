@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Thêm Người vận hành UAV mới - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'agents:agent_list' %}">
+            <i class="bi bi-people me-1"></i> Người vận hành UAV
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:alert_list' %}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Sự cố & Cảnh báo
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Breadcrumb -->
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-body py-3">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb mb-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="{% url 'supervisor_dashboard' %}" class="text-decoration-none">Bảng điều khiển</a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="{% url 'agents:agent_list' %}" class="text-decoration-none">Người vận hành UAV</a>
+                                    </li>
+                                    <li class="breadcrumb-item active">Thêm Người vận hành UAV mới</li>
+                                </ol>
+                            </nav>
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge {% get_role_badge user %} fs-6">
+                                <i class="bi bi-shield-check me-1"></i>Điều phối viên giám sát
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Form Card -->
+            <div class="card shadow-lg border-0">
+                <div class="card-header {% get_role_bg user %} text-white py-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-person-plus-fill display-6 me-3"></i>
+                        <div>
+                            <h2 class="h4 mb-0">Thêm Người vận hành UAV mới</h2>
+                            <p class="mb-0 opacity-75">Tạo tài khoản Người vận hành UAV cho đội giám sát</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-4">
+                    <form method="post" novalidate class="needs-validation">
+                        {% csrf_token %}
+                        
+                        <!-- Account Information Section -->
+                        <div class="mb-5">
+                            <div class="d-flex align-items-center p-3 bg-light rounded-3 border-start border-4 border-primary mb-4">
+                                <h5 class="mb-0 fw-semibold text-dark">
+                                    <i class="bi bi-person-badge me-2 text-primary"></i>Thông tin tài khoản đăng nhập
+                                </h5>
+                            </div>
+                            
+                            <div class="row g-3">
+                                {% for field in user_form %}
+                                <div class="col-md-{% if field.name == 'email' %}12{% else %}6{% endif %}">
+                                    <div class="form-floating">
+                                        {{ field }}
+                                        <label for="{{ field.id_for_label }}" class="{% if field.field.required %}required{% endif %}">
+                                            {{ field.label }} {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                                        </label>
+                                        {% if field.help_text %}
+                                            <div class="form-text">{{ field.help_text }}</div>
+                                        {% endif %}
+                                        {% if field.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {% for error in field.errors %}
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Agent Profile Section -->
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center p-3 bg-light rounded-3 border-start border-4 border-primary mb-4">
+                                <h5 class="mb-0 fw-semibold text-dark">
+                                    <i class="bi bi-clipboard-data me-2 text-primary"></i>Hồ sơ Người vận hành UAV
+                                </h5>
+                            </div>
+                            
+                            <div class="row g-3">
+                                {% for field in profile_form %}
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        {{ field }}
+                                        <label for="{{ field.id_for_label }}">
+                                            {{ field.label }}
+                                        </label>
+                                        {% if field.help_text %}
+                                            <div class="form-text">{{ field.help_text }}</div>
+                                        {% endif %}
+                                        {% if field.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {% for error in field.errors %}
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="border-top pt-4 mt-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Các trường có dấu <span class="text-danger">*</span> là bắt buộc
+                                    </small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'supervisor_dashboard' %}" class="btn btn-outline-secondary px-4">
+                                        <i class="bi bi-x-circle me-2"></i>Hủy bỏ
+                                    </a>
+                                    <button type="submit" class="btn {% get_role_btn user %} px-4">
+                                        <i class="bi bi-person-plus me-2"></i>Tạo tài khoản Người vận hành
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            if (!input.classList.contains('form-control') && input.type !== 'checkbox') {
+                input.classList.add('form-control');
+            }
+        });
+
+        const forms = document.querySelectorAll('.needs-validation');
+        forms.forEach(form => {
+            form.addEventListener('submit', function(event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    });
+</script>
+{% endblock %}

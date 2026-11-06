@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load role_colors %}
+
+{% block title %}Tạo Dự án tuần tra mới - Hệ thống Báo cháy UAV{% endblock %}
+
+{% block navbar_brand_url %}{% url 'supervisor_dashboard' %}{% endblock %}
+
+{% block navbar_content %}
+<ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'supervisor_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'projects:project_list' %}">
+            <i class="bi bi-folder me-1"></i> Dự án tuần tra
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Main Form Card -->
+            <div class="card shadow-lg border-0">
+                <div class="card-header {% get_role_bg user %} text-white py-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-folder-plus display-6 me-3"></i>
+                        <div>
+                            <h2 class="h4 mb-0">Tạo Dự án tuần tra mới</h2>
+                            <p class="mb-0 opacity-75">Thiết lập tuyến bay tuần tra phòng cháy và phân công người vận hành UAV</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body p-4">
+                    <form method="post" novalidate class="needs-validation">
+                        {% csrf_token %}
+
+                        <!-- Project Details Section -->
+                        <div class="mb-5">
+                            <div class="d-flex align-items-center p-3 bg-light rounded-3 border-start border-4 border-primary mb-4">
+                                <h5 class="mb-0 fw-semibold text-dark">
+                                    <i class="bi bi-folder2-open me-2 text-primary"></i>Thông tin cơ bản của Dự án
+                                </h5>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        {{ form.name }}
+                                        <label for="{{ form.name.id_for_label }}">
+                                            Tên dự án / Tuyến bay <span class="text-danger">*</span>
+                                        </label>
+                                        {% if form.name.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {% for error in form.name.errors %}
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        {{ form.start_date }}
+                                        <label for="{{ form.start_date.id_for_label }}">
+                                            Ngày bắt đầu <span class="text-danger">*</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="mb-5">
+                            <div class="d-flex align-items-center p-3 bg-light rounded-3 border-start border-4 border-primary mb-4">
+                                <h5 class="mb-0 fw-semibold text-dark">
+                                    <i class="bi bi-card-text me-2 text-primary"></i>Mục tiêu giám sát & Mô tả
+                                </h5>
+                            </div>
+                            <div class="form-floating">
+                                {{ form.description }}
+                                <label for="{{ form.description.id_for_label }}">Mô tả chi tiết mục tiêu tuần tra</label>
+                            </div>
+                        </div>
+
+                        <!-- Note about zone-based agent assignment -->
+                        <div class="mb-4">
+                            <div class="alert alert-info d-flex align-items-center">
+                                <i class="bi bi-info-circle-fill fs-5 me-2"></i>
+                                <div>
+                                    <strong>Lưu ý:</strong> Người vận hành UAV sẽ được phân công trực tiếp theo từng phân khu cụ thể sau khi bạn vẽ ranh giới vùng bay.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="border-top pt-4 mt-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Các trường có dấu <span class="text-danger">*</span> là bắt buộc
+                                    </small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary px-4">
+                                        <i class="bi bi-x-circle me-2"></i>Hủy bỏ
+                                    </a>
+                                    <button type="submit" class="btn {% get_role_btn user %} px-4">
+                                        <i class="bi bi-folder-plus me-2"></i>Khởi tạo Dự án
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            if (!input.classList.contains('form-control') && input.type !== 'checkbox') {
+                input.classList.add('form-control');
+            }
+        });
+
+        const forms = document.querySelectorAll('.needs-validation');
+        forms.forEach(form => {
+            form.addEventListener('submit', function(event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    });
+</script>
+{% endblock %}
